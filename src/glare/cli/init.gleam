@@ -87,8 +87,10 @@ fn write_handler(package_name: String) -> Result(Nil, String) {
     }
     _ -> {
       let content =
-        "import glare.{type Context, type Env}\n"
+        "import glare/bindings.{type Env}\n"
         <> "import glare/response\n"
+        <> "import glare/worker.{type Context}\n"
+        <> "import gleam/javascript/promise\n"
         <> "\n"
         <> "pub fn fetch(request, env: Env, ctx: Context) {\n"
         <> "  response.new(200)\n"
