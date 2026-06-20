@@ -1,29 +1,34 @@
 import gleam/io
+import gleam/list
 import gleam/result
 import gleam/string
 import simplifile
-import glare/cli/toml_utils
 
 pub fn run() -> Nil {
   io.println("\nInitializing Cloudflare Workers in current project...")
 
   let outcome =
-    toml_utils.load_config()
-    |> result.map_error(fn(e) { "Failed to load gleam.toml: " <> e })
-    |> result.try(fn(config) {
-      add_cloudflare_section(config.package_name)
-      |> result.map(fn(_) { config })
+    simplifile.read("gleam.toml")
+    |> result.map_error(fn(_) { "Could not read gleam.toml. Are you in a Gleam project?" })
+    |> result.try(fn(content) {
+      extract_package_name(content)
+      |> result.map(fn(name) { #(content, name) })
     })
-    |> result.try(fn(config) {
-      write_handler(config.package_name)
+    |> result.try(fn(pair) {
+      let #(content, name) = pair
+      add_cloudflare_section(content, name)
+      |> result.map(fn(_) { name })
+    })
+    |> result.try(fn(name) {
+      write_handler(name)
     })
 
   case outcome {
     Ok(_) -> {
       io.println("\nDone! Your project is ready for Cloudflare Workers.")
       io.println("\n  1. Edit your handler file to add Cloudflare Workers handlers")
-      io.println("  2. Run: gleam run -m glare -- build")
-      io.println("  3. Run: gleam run -m glare -- dev")
+      io.println("  2. Run: gleam run --target javascript -m glare -- build")
+      io.println("  3. Run: gleam run --target javascript -m glare -- dev")
     }
     Error(msg) -> {
       io.println_error("Error: " <> msg)
@@ -31,12 +36,21 @@ pub fn run() -> Nil {
   }
 }
 
-fn add_cloudflare_section(package_name: String) -> Result(Nil, String) {
-  use content <- result.try(
-    simplifile.read("gleam.toml")
-    |> result.map_error(fn(_) { "Could not read gleam.toml" }),
-  )
+fn extract_package_name(content: String) -> Result(String, String) {
+  let lines = string.split(content, "\n")
+  case list.find(lines, fn(line) { string.starts_with(line, "name = ") }) {
+    Ok(line) -> {
+      let name = line |> string.drop_start(7) |> string.trim |> string.replace("\"", with: "")
+      case string.is_empty(name) {
+        True -> Error("Could not parse package name from gleam.toml")
+        False -> Ok(name)
+      }
+    }
+    Error(_) -> Error("Could not find 'name' in gleam.toml")
+  }
+}
 
+fn add_cloudflare_section(content: String, package_name: String) -> Result(Nil, String) {
   case string.contains(content, "[cloudflare]") {
     True -> {
       io.println("  [cloudflare] section already exists in gleam.toml")
