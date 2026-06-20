@@ -33,18 +33,15 @@ pub type D1ExecResult {
   )
 }
 
-@external(erlang, "glare_ffi_d1", "d1_prepare")
 @external(javascript, "glare_ffi_d1.mjs", "d1_prepare")
 pub fn prepare(db: Database, query: String) -> PreparedStatement
 
-@external(erlang, "glare_ffi_d1", "d1_bind")
 @external(javascript, "glare_ffi_d1.mjs", "d1_bind")
 pub fn bind(
   statement: PreparedStatement,
   values: List(Dynamic),
 ) -> PreparedStatement
 
-@external(erlang, "glare_ffi_d1", "d1_run")
 @external(javascript, "glare_ffi_d1.mjs", "d1_run")
 fn do_run(statement: PreparedStatement) -> Promise(Result(Dynamic, String))
 
@@ -64,7 +61,6 @@ pub fn run(
   }
 }
 
-@external(erlang, "glare_ffi_d1", "d1_first")
 @external(javascript, "glare_ffi_d1.mjs", "d1_first")
 fn do_first(statement: PreparedStatement) -> Promise(Result(Dynamic, String))
 
@@ -83,7 +79,6 @@ pub fn first(
   }
 }
 
-@external(erlang, "glare_ffi_d1", "d1_all")
 @external(javascript, "glare_ffi_d1.mjs", "d1_all")
 fn do_all(statement: PreparedStatement) -> Promise(Result(Dynamic, String))
 
@@ -103,7 +98,6 @@ pub fn all(
   }
 }
 
-@external(erlang, "glare_ffi_d1", "d1_exec")
 @external(javascript, "glare_ffi_d1.mjs", "d1_exec")
 fn do_exec(db: Database, query: String) -> Promise(Result(Dynamic, String))
 

@@ -63,7 +63,6 @@ pub type GetWithMetadataResult {
   GetWithMetadataResult(value: String, metadata: Option(Dynamic))
 }
 
-@external(erlang, "glare_ffi_kv", "kv_get")
 @external(javascript, "glare_ffi_kv.mjs", "kv_get")
 fn do_get(
   namespace: Kv,
@@ -87,7 +86,6 @@ pub fn get(
   }
 }
 
-@external(erlang, "glare_ffi_kv", "kv_get_with_metadata")
 @external(javascript, "glare_ffi_kv.mjs", "kv_get_with_metadata")
 fn do_get_with_metadata(
   namespace: Kv,
@@ -123,7 +121,6 @@ fn decode_get_with_metadata_result() {
   decode.success(GetWithMetadataResult(value: value, metadata: metadata))
 }
 
-@external(erlang, "glare_ffi_kv", "kv_put")
 @external(javascript, "glare_ffi_kv.mjs", "kv_put")
 fn do_put(
   namespace: Kv,
@@ -149,7 +146,6 @@ pub fn put(
   }
 }
 
-@external(erlang, "glare_ffi_kv", "kv_delete")
 @external(javascript, "glare_ffi_kv.mjs", "kv_delete")
 fn do_delete(namespace: Kv, key: String) -> Promise(Result(Dynamic, String))
 
@@ -164,7 +160,6 @@ pub fn delete(
   }
 }
 
-@external(erlang, "glare_ffi_kv", "kv_list")
 @external(javascript, "glare_ffi_kv.mjs", "kv_list")
 fn do_list(namespace: Kv, options: json.Json) -> Promise(Result(Dynamic, String))
 
