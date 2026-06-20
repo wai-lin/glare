@@ -5,7 +5,7 @@ import gleam/string
 import simplifile
 import glare/cli/toml_utils.{type Config, type DoClass}
 
-@external(javascript, "./ffi.mjs", "generate_uuid")
+@external(javascript, "../ffi.mjs", "generate_uuid")
 fn generate_uuid() -> String
 
 pub fn entrypoint(
