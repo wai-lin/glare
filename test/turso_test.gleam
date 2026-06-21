@@ -5,6 +5,7 @@ import gleam/list
 import gleam/option.{None, Some}
 import gflare/turso
 import gflare/turso/types
+import gflare/turso/cloud
 
 pub fn main() {
   gleeunit.main()
@@ -155,4 +156,50 @@ pub fn empty_row_test() {
   let row = types.Row(columns: [], values: [])
   row.columns |> should.equal([])
   row.values |> should.equal([])
+}
+
+// Cloud config tests
+
+pub fn cloud_connect_test() {
+  let config = cloud.connect("my-org", "token123")
+  config.org |> should.equal("my-org")
+  config.token |> should.equal("token123")
+}
+
+pub fn cloud_connect_empty_test() {
+  let config = cloud.connect("", "")
+  config.org |> should.equal("")
+  config.token |> should.equal("")
+}
+
+// Cloud database type tests
+
+pub fn database_construction_test() {
+  let db = cloud.Database(
+    name: "test-db",
+    db_id: "abc-123",
+    hostname: "test-db-org.turso.io",
+    group: "default",
+    primary_region: "aws-us-east-1",
+  )
+  db.name |> should.equal("test-db")
+  db.db_id |> should.equal("abc-123")
+  db.hostname |> should.equal("test-db-org.turso.io")
+  db.group |> should.equal("default")
+  db.primary_region |> should.equal("aws-us-east-1")
+}
+
+// Cloud token type tests
+
+pub fn token_result_test() {
+  let token = cloud.TokenResult(jwt: "eyJhbGciOiJIUzI1NiJ9")
+  token.jwt |> should.equal("eyJhbGciOiJIUzI1NiJ9")
+}
+
+// Cloud group type tests
+
+pub fn group_construction_test() {
+  let group = cloud.Group(name: "default", location: "aws-us-east-1")
+  group.name |> should.equal("default")
+  group.location |> should.equal("aws-us-east-1")
 }

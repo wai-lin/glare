@@ -14,7 +14,7 @@ gleam add gflare
 # Initialize Cloudflare Workers in your project
 gleam run -m gflare -- init
 
-# Or add to an existing project, then:
+# Or run the wrangler dev with
 gleam run -m gflare -- dev
 ```
 
@@ -209,6 +209,7 @@ pub fn run_raw_sql(request, env: Env, ctx: Context) {
   use result <- promise.await(d1.exec(db, "CREATE TABLE IF NOT EXISTS users (id INTEGER PRIMARY KEY, name TEXT)"))
   response.new(200) |> response.set_body("OK") |> promise.resolve
 }
+```
 
 ### Turso (Database over HTTP)
 
@@ -278,6 +279,52 @@ pub fn transaction_example(request, env: Env, ctx: Context) {
     #("UPDATE accounts SET balance = balance + 100 WHERE id = 2", []),
   ]))
   // Handle result...
+}
+```
+
+### Turso Platform API (Database Management)
+
+Create, delete, and manage databases programmatically. Perfect for multi-tenant SaaS.
+
+```gleam
+import gflare/turso/cloud
+
+pub fn main() {
+  // Connect to Turso Platform API
+  let api = cloud.connect("my-org", "platform-api-token")
+
+  // Create a database for a new user
+  use result <- promise.await(cloud.create_database(api, "user-abc123", "default"))
+  case result {
+    Ok(db) -> {
+      // db.hostname, db.db_id, db.name
+      io.println("Created database: " <> db.name)
+
+      // Generate a scoped auth token
+      use token_result <- promise.await(cloud.create_token(api, "user-abc123", "2w", "full-access"))
+      case token_result {
+        Ok(token) -> io.println("Token: " <> token.jwt)
+        Error(e) -> io.println_error(error.to_string(e))
+      }
+    }
+    Error(e) -> io.println_error(error.to_string(e))
+  }
+
+  // List all databases
+  use result <- promise.await(cloud.list_databases(api))
+  case result {
+    Ok(databases) -> list.each(databases, fn(db) { io.println(db.name) })
+    Error(e) -> io.println_error(error.to_string(e))
+  }
+
+  // Delete a database
+  use _ <- promise.await(cloud.delete_database(api, "user-abc123"))
+
+  // Group management
+  use _ <- promise.await(cloud.create_group(api, "my-group"))
+  use _ <- promise.await(cloud.delete_group(api, "my-group"))
+  use result <- promise.await(cloud.list_groups(api))
+  // ...
 }
 ```
 
