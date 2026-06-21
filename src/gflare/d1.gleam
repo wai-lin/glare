@@ -33,6 +33,48 @@ pub type D1ExecResult {
   )
 }
 
+pub fn int(value: Int) -> Dynamic {
+  do_int(value)
+}
+
+pub fn float(value: Float) -> Dynamic {
+  do_float(value)
+}
+
+pub fn text(value: String) -> Dynamic {
+  do_text(value)
+}
+
+pub fn bool(value: Bool) -> Dynamic {
+  do_bool(value)
+}
+
+pub fn blob(value: BitArray) -> Dynamic {
+  do_blob(value)
+}
+
+pub fn null_value() -> Dynamic {
+  do_null()
+}
+
+@external(javascript, "../gflare_ffi_d1.mjs", "d1_int")
+fn do_int(value: Int) -> Dynamic
+
+@external(javascript, "../gflare_ffi_d1.mjs", "d1_float")
+fn do_float(value: Float) -> Dynamic
+
+@external(javascript, "../gflare_ffi_d1.mjs", "d1_text")
+fn do_text(value: String) -> Dynamic
+
+@external(javascript, "../gflare_ffi_d1.mjs", "d1_bool")
+fn do_bool(value: Bool) -> Dynamic
+
+@external(javascript, "../gflare_ffi_d1.mjs", "d1_blob")
+fn do_blob(value: BitArray) -> Dynamic
+
+@external(javascript, "../gflare_ffi_d1.mjs", "d1_null")
+fn do_null() -> Dynamic
+
 @external(javascript, "../gflare_ffi_d1.mjs", "d1_prepare")
 pub fn prepare(db: Database, query: String) -> PreparedStatement
 

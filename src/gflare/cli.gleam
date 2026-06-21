@@ -1,6 +1,7 @@
 import argv
 import glint
 import gflare/cli/build
+import gflare/cli/db
 import gflare/cli/init
 
 pub fn main() {
@@ -14,6 +15,7 @@ pub fn main() {
     |> glint.add(at: ["build"], do: build_command())
     |> glint.add(at: ["dev"], do: dev_command())
     |> glint.add(at: ["deploy"], do: deploy_command())
+    |> glint.add(at: ["db"], do: db_command())
 
   let args = argv.load().arguments
   glint.run(app, args)
@@ -41,4 +43,10 @@ fn deploy_command() {
   use <- glint.command_help("Build and deploy to Cloudflare")
   use _, _, _ <- glint.command()
   build.run(deploy: True, dev: False)
+}
+
+fn db_command() {
+  use <- glint.command_help("Database tools (generate, migrate)")
+  use _, _, _ <- glint.command()
+  db.run()
 }

@@ -1,5 +1,29 @@
 import { Ok, Error } from "./gleam.mjs";
 
+export function d1_int(value) {
+  return value;
+}
+
+export function d1_float(value) {
+  return value;
+}
+
+export function d1_text(value) {
+  return value;
+}
+
+export function d1_bool(value) {
+  return value ? 1 : 0;
+}
+
+export function d1_blob(value) {
+  return new Uint8Array(value);
+}
+
+export function d1_null() {
+  return null;
+}
+
 export function d1_prepare(db, query) {
   return db.prepare(query);
 }
