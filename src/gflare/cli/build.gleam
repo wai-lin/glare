@@ -184,5 +184,5 @@ fn update_wrangler_main(
   |> result.map_error(fn(_) { "Failed to update wrangler.toml" })
 }
 
-@external(javascript, "../gflare/ffi.mjs", "get_iso_date")
+@external(javascript, "../ffi.mjs", "get_iso_date")
 fn do_get_iso_date() -> String

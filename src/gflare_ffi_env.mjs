@@ -1,4 +1,5 @@
-import { Ok, Error, Some, None } from "./gleam.mjs";
+import { Ok, Error } from "./gleam.mjs";
+import { Some, None } from "../gleam_stdlib/gleam/option.mjs";
 
 export function get_env_option(name) {
   // Deno

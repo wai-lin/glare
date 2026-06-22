@@ -319,5 +319,5 @@ fn get_timestamp() -> String {
   do_get_iso_timestamp()
 }
 
-@external(javascript, "../gflare/ffi.mjs", "get_iso_timestamp")
+@external(javascript, "../ffi.mjs", "get_iso_timestamp")
 fn do_get_iso_timestamp() -> String

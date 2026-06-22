@@ -119,5 +119,5 @@ fn write_handler(package_name: String) -> Result(Nil, String) {
   }
 }
 
-@external(javascript, "../gflare/ffi.mjs", "get_iso_date")
+@external(javascript, "../ffi.mjs", "get_iso_date")
 fn do_get_iso_date() -> String

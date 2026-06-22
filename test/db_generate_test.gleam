@@ -1,0 +1,347 @@
+import gleeunit
+import gleeunit/should
+
+import gflare/cli/db/generate
+import gflare/cli/db/types.{
+  D1, GBitArray, GBool, GFloat, GInt, GOption, GString, ParsedQuery, QueryParam,
+  ResultSet, Turso,
+}
+import gleam/io
+import gleam/string
+import simplifile
+
+pub fn main() {
+  gleeunit.main()
+}
+
+fn generate_and_read(queries, backend, path) -> String {
+  case generate.generate_sql_module(queries, backend, path) {
+    Ok(Nil) ->
+      case simplifile.read(path) {
+        Ok(content) -> {
+          let _ = simplifile.delete(path)
+          content
+        }
+        Error(_) -> {
+          should.fail()
+          ""
+        }
+      }
+    Error(e) -> {
+      io.println(e)
+      should.fail()
+      ""
+    }
+  }
+}
+
+fn should_contain(haystack: String, needle: String) {
+  case string.contains(haystack, needle) {
+    True -> Nil
+    False -> {
+      io.println("Expected content to contain: " <> needle)
+      should.fail()
+    }
+  }
+}
+
+fn should_not_contain(haystack: String, needle: String) {
+  case string.contains(haystack, needle) {
+    False -> Nil
+    True -> {
+      io.println("Expected content NOT to contain: " <> needle)
+      should.fail()
+    }
+  }
+}
+
+// D1 module generation tests
+
+pub fn generate_d1_select_with_returns_test() {
+  let queries = [
+    ParsedQuery(
+      name: "find_user",
+      params: [QueryParam(name: "user_id", gleam_type: GInt)],
+      returns: [
+        ResultSet(name: "id", gleam_type: GInt),
+        ResultSet(name: "name", gleam_type: GString),
+      ],
+      sql: "SELECT id, name FROM users WHERE id = ?1",
+    ),
+  ]
+  let content = generate_and_read(queries, D1, "/tmp/test_d1_select.gleam")
+  should_contain(content, "pub type FindUserRow")
+  should_contain(content, "FindUserRow(")
+  should_contain(content, "id: Int")
+  should_contain(content, "name: String")
+  should_contain(content, "pub fn find_user(")
+  should_contain(content, "d1.Database db")
+  should_contain(content, "decode.int")
+  should_contain(content, "decode.string")
+}
+
+pub fn generate_d1_insert_no_returns_test() {
+  let queries = [
+    ParsedQuery(
+      name: "create_user",
+      params: [
+        QueryParam(name: "name", gleam_type: GString),
+        QueryParam(name: "email", gleam_type: GString),
+      ],
+      returns: [],
+      sql: "INSERT INTO users (name, email) VALUES (?1, ?2)",
+    ),
+  ]
+  let content = generate_and_read(queries, D1, "/tmp/test_d1_insert.gleam")
+  should_contain(content, "pub fn create_user(")
+  should_not_contain(content, "pub type CreateUserRow")
+  should_contain(content, "d1.D1Result")
+  should_contain(content, "d1.text(name)")
+  should_contain(content, "d1.text(email)")
+}
+
+pub fn generate_d1_with_option_return_test() {
+  let queries = [
+    ParsedQuery(
+      name: "find_optional",
+      params: [QueryParam(name: "id", gleam_type: GInt)],
+      returns: [
+        ResultSet(name: "id", gleam_type: GInt),
+        ResultSet(name: "email", gleam_type: GOption(GString)),
+      ],
+      sql: "SELECT id, email FROM users WHERE id = ?1",
+    ),
+  ]
+  let content = generate_and_read(queries, D1, "/tmp/test_d1_option.gleam")
+  should_contain(content, "email: Option(String)")
+  should_contain(content, "decode.optional(decode.string)")
+}
+
+// Turso module generation tests
+
+pub fn generate_turso_select_with_returns_test() {
+  let queries = [
+    ParsedQuery(
+      name: "find_item",
+      params: [QueryParam(name: "item_id", gleam_type: GInt)],
+      returns: [
+        ResultSet(name: "id", gleam_type: GInt),
+        ResultSet(name: "name", gleam_type: GString),
+        ResultSet(name: "price", gleam_type: GFloat),
+      ],
+      sql: "SELECT id, name, price FROM items WHERE id = ?1",
+    ),
+  ]
+  let content =
+    generate_and_read(queries, Turso, "/tmp/test_turso_select.gleam")
+  should_contain(content, "pub type FindItemRow")
+  should_contain(content, "id: Int")
+  should_contain(content, "name: String")
+  should_contain(content, "price: Float")
+  should_contain(content, "pub fn find_item(")
+  should_contain(content, "turso.Config config")
+  should_contain(content, "turso.int(item_id)")
+  should_contain(content, "decode.int")
+  should_contain(content, "decode.float")
+}
+
+pub fn generate_turso_insert_no_returns_test() {
+  let queries = [
+    ParsedQuery(
+      name: "insert_item",
+      params: [
+        QueryParam(name: "name", gleam_type: GString),
+        QueryParam(name: "price", gleam_type: GFloat),
+      ],
+      returns: [],
+      sql: "INSERT INTO items (name, price) VALUES (?1, ?2)",
+    ),
+  ]
+  let content =
+    generate_and_read(queries, Turso, "/tmp/test_turso_insert.gleam")
+  should_contain(content, "pub fn insert_item(")
+  should_not_contain(content, "pub type InsertItemRow")
+  should_contain(content, "turso.ExecuteResult")
+  should_contain(content, "turso.text(name)")
+  should_contain(content, "turso.float(price)")
+}
+
+// Multiple queries test
+
+pub fn generate_multiple_queries_test() {
+  let queries = [
+    ParsedQuery(
+      name: "find_user",
+      params: [QueryParam(name: "id", gleam_type: GInt)],
+      returns: [
+        ResultSet(name: "id", gleam_type: GInt),
+        ResultSet(name: "name", gleam_type: GString),
+      ],
+      sql: "SELECT id, name FROM users WHERE id = ?1",
+    ),
+    ParsedQuery(
+      name: "list_users",
+      params: [],
+      returns: [
+        ResultSet(name: "id", gleam_type: GInt),
+        ResultSet(name: "name", gleam_type: GString),
+      ],
+      sql: "SELECT id, name FROM users",
+    ),
+  ]
+  let content = generate_and_read(queries, D1, "/tmp/test_multi.gleam")
+  should_contain(content, "pub type FindUserRow")
+  should_contain(content, "pub type ListUsersRow")
+  should_contain(content, "pub fn find_user(")
+  should_contain(content, "pub fn list_users(")
+}
+
+// SQL escaping tests
+
+pub fn generate_sql_with_quotes_test() {
+  let queries = [
+    ParsedQuery(
+      name: "search",
+      params: [QueryParam(name: "term", gleam_type: GString)],
+      returns: [],
+      sql: "SELECT * FROM users WHERE name LIKE '%test%'",
+    ),
+  ]
+  let content = generate_and_read(queries, D1, "/tmp/test_quotes.gleam")
+  should_contain(content, "pub fn search(")
+  should_contain(content, "d1.text(term)")
+}
+
+pub fn generate_sql_with_newlines_test() {
+  let queries = [
+    ParsedQuery(
+      name: "multi_line",
+      params: [],
+      returns: [],
+      sql: "SELECT\n  id,\n  name\nFROM users",
+    ),
+  ]
+  let content = generate_and_read(queries, D1, "/tmp/test_newlines.gleam")
+  should_contain(content, "pub fn multi_line(")
+}
+
+// Type mapping tests
+
+pub fn generate_d1_bool_param_test() {
+  let queries = [
+    ParsedQuery(
+      name: "toggle",
+      params: [QueryParam(name: "active", gleam_type: GBool)],
+      returns: [],
+      sql: "UPDATE users SET active = ?1",
+    ),
+  ]
+  let content = generate_and_read(queries, D1, "/tmp/test_bool.gleam")
+  should_contain(content, "d1.int(active)")
+}
+
+pub fn generate_d1_blob_param_test() {
+  let queries = [
+    ParsedQuery(
+      name: "upload",
+      params: [QueryParam(name: "data", gleam_type: GBitArray)],
+      returns: [],
+      sql: "INSERT INTO files (data) VALUES (?1)",
+    ),
+  ]
+  let content = generate_and_read(queries, D1, "/tmp/test_blob.gleam")
+  should_contain(content, "d1.blob(data)")
+}
+
+pub fn generate_turso_date_param_test() {
+  let queries = [
+    ParsedQuery(
+      name: "by_date",
+      params: [QueryParam(name: "created", gleam_type: GString)],
+      returns: [],
+      sql: "SELECT * FROM events WHERE date = ?1",
+    ),
+  ]
+  let content = generate_and_read(queries, Turso, "/tmp/test_date.gleam")
+  should_contain(content, "turso.text(created)")
+}
+
+// Empty params test
+
+pub fn generate_no_params_test() {
+  let queries = [
+    ParsedQuery(
+      name: "count_all",
+      params: [],
+      returns: [ResultSet(name: "count", gleam_type: GInt)],
+      sql: "SELECT COUNT(*) as count FROM users",
+    ),
+  ]
+  let content = generate_and_read(queries, D1, "/tmp/test_no_params.gleam")
+  should_contain(content, "pub fn count_all(")
+  should_contain(content, "d1.Database")
+  // The generated code includes d1.bind even with no params
+  should_contain(content, "d1.prepare(db,")
+  should_contain(content, "d1.first()")
+}
+
+// Import verification tests
+
+pub fn generate_d1_imports_test() {
+  let queries = [
+    ParsedQuery(name: "test", params: [], returns: [], sql: "SELECT 1"),
+  ]
+  let content = generate_and_read(queries, D1, "/tmp/test_imports.gleam")
+  should_contain(content, "import gleam/dynamic/decode")
+  should_contain(content, "import gleam/javascript/promise")
+  should_contain(content, "import gleam/option.{type Option, None, Some}")
+  should_contain(content, "import gflare/d1")
+  should_contain(content, "import gflare/error.{type Error}")
+}
+
+pub fn generate_turso_imports_test() {
+  let queries = [
+    ParsedQuery(name: "test", params: [], returns: [], sql: "SELECT 1"),
+  ]
+  let content =
+    generate_and_read(queries, Turso, "/tmp/test_turso_imports.gleam")
+  should_contain(content, "import gleam/dynamic/decode")
+  should_contain(content, "import gleam/javascript/promise")
+  should_contain(content, "import gleam/option.{type Option, None, Some}")
+  should_contain(content, "import gflare/turso")
+  should_contain(content, "import gflare/turso/error.{type TursoError}")
+}
+
+// Decoder generation tests
+
+pub fn generate_decoder_with_multiple_fields_test() {
+  let queries = [
+    ParsedQuery(
+      name: "complex",
+      params: [],
+      returns: [
+        ResultSet(name: "id", gleam_type: GInt),
+        ResultSet(name: "name", gleam_type: GString),
+        ResultSet(name: "score", gleam_type: GFloat),
+        ResultSet(name: "active", gleam_type: GBool),
+      ],
+      sql: "SELECT * FROM complex_table",
+    ),
+  ]
+  let content = generate_and_read(queries, D1, "/tmp/test_decoder.gleam")
+  should_contain(content, "use id <- decode.field(0, decode.int)")
+  should_contain(content, "use name <- decode.field(1, decode.string)")
+  should_contain(content, "use score <- decode.field(2, decode.float)")
+  should_contain(content, "use active <- decode.field(3, decode.bool)")
+}
+
+// Error handling tests
+
+pub fn generate_invalid_path_test() {
+  let queries = [
+    ParsedQuery(name: "test", params: [], returns: [], sql: "SELECT 1"),
+  ]
+  let result =
+    generate.generate_sql_module(queries, D1, "/nonexistent/dir/file.gleam")
+  result |> should.be_error
+}
