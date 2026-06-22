@@ -1,5 +1,5 @@
 import gflare/cli/db/types.{
-  type DbBackend, type ParsedQuery, type ResultSet, D1, Turso,
+  type DbBackend, type ParsedQuery, type ResultSet, Both, D1, Turso,
   gleam_type_to_d1_bind, gleam_type_to_decoder, gleam_type_to_string,
   gleam_type_to_turso_value,
 }
@@ -7,51 +7,224 @@ import gleam/list
 import gleam/string
 import simplifile
 
+// Multi-file generation for dual backend support
+
+pub fn generate_sql_modules(
+  queries: List(ParsedQuery),
+  cli_backend: DbBackend,
+  output_dir: String,
+  package_name: String,
+) -> Result(Nil, String) {
+  // Determine which backends are needed
+  let needed_backends = determine_backends(queries, cli_backend)
+  let is_multi = list.length(needed_backends) > 1
+
+  // Generate shared types if multiple backends
+  case is_multi {
+    True -> {
+      let shared_content = generate_shared_types(queries, package_name)
+      case write_file(output_dir <> "/sql_shared.gleam", shared_content) {
+        Ok(Nil) ->
+          generate_d1_if_needed(
+            queries,
+            needed_backends,
+            is_multi,
+            output_dir,
+            package_name,
+          )
+        Error(e) -> Error(e)
+      }
+    }
+    False ->
+      generate_d1_if_needed(
+        queries,
+        needed_backends,
+        is_multi,
+        output_dir,
+        package_name,
+      )
+  }
+}
+
+fn generate_d1_if_needed(
+  queries: List(ParsedQuery),
+  needed_backends: List(DbBackend),
+  is_multi: Bool,
+  output_dir: String,
+  package_name: String,
+) -> Result(Nil, String) {
+  case list.contains(needed_backends, D1) {
+    True -> {
+      let d1_queries = filter_queries_for_backend(queries, D1)
+      let d1_content = generate_d1_module(d1_queries, is_multi, package_name)
+      case write_file(output_dir <> "/d1_sql.gleam", d1_content) {
+        Ok(Nil) ->
+          generate_turso_if_needed(
+            queries,
+            needed_backends,
+            is_multi,
+            output_dir,
+            package_name,
+          )
+        Error(e) -> Error(e)
+      }
+    }
+    False ->
+      generate_turso_if_needed(
+        queries,
+        needed_backends,
+        is_multi,
+        output_dir,
+        package_name,
+      )
+  }
+}
+
+fn generate_turso_if_needed(
+  queries: List(ParsedQuery),
+  needed_backends: List(DbBackend),
+  is_multi: Bool,
+  output_dir: String,
+  package_name: String,
+) -> Result(Nil, String) {
+  case list.contains(needed_backends, Turso) {
+    True -> {
+      let turso_queries = filter_queries_for_backend(queries, Turso)
+      let turso_content =
+        generate_turso_module(turso_queries, is_multi, package_name)
+      write_file(output_dir <> "/turso_sql.gleam", turso_content)
+    }
+    False -> Ok(Nil)
+  }
+}
+
+fn determine_backends(
+  queries: List(ParsedQuery),
+  cli_backend: DbBackend,
+) -> List(DbBackend) {
+  let query_backends = list.flat_map(queries, fn(q) { q.backends })
+  case cli_backend {
+    Turso -> [Turso]
+    D1 -> [D1]
+    Both -> {
+      // Collect unique backends from queries
+      let unique = list.unique(query_backends)
+      case unique {
+        [] -> [D1, Turso]
+        _ -> unique
+      }
+    }
+  }
+}
+
+fn filter_queries_for_backend(
+  queries: List(ParsedQuery),
+  backend: DbBackend,
+) -> List(ParsedQuery) {
+  list.filter(queries, fn(q) { list.contains(q.backends, backend) })
+}
+
+fn write_file(path: String, content: String) -> Result(Nil, String) {
+  case simplifile.write(to: path, contents: content) {
+    Ok(Nil) -> Ok(Nil)
+    Error(e) ->
+      Error("Failed to write " <> path <> ": " <> simplifile.describe_error(e))
+  }
+}
+
+fn generate_shared_types(
+  queries: List(ParsedQuery),
+  package_name: String,
+) -> String {
+  let queries_with_returns = list.filter(queries, fn(q) { q.returns != [] })
+  let types =
+    list.map(queries_with_returns, generate_row_type) |> string.join("\n\n")
+
+  "// AUTO-GENERATED - shared types for SQL queries\n"
+  <> "// Do not edit manually\n\n"
+  <> "import gleam/option.{type Option}\n\n"
+  <> types
+}
+
+// Single-file generation (backward compatibility)
+
 pub fn generate_sql_module(
   queries: List(ParsedQuery),
   backend: DbBackend,
   output_path: String,
 ) -> Result(Nil, String) {
   let content = case backend {
-    D1 -> generate_d1_module(queries)
-    Turso -> generate_turso_module(queries)
+    D1 -> generate_d1_module(queries, False, "")
+    Turso -> generate_turso_module(queries, False, "")
+    Both -> generate_d1_module(queries, False, "")
   }
-  case simplifile.write(to: output_path, contents: content) {
-    Ok(Nil) -> Ok(Nil)
-    Error(e) ->
-      Error(
-        "Failed to write "
-        <> output_path
-        <> ": "
-        <> simplifile.describe_error(e),
-      )
-  }
+  write_file(output_path, content)
 }
 
-fn generate_d1_module(queries: List(ParsedQuery)) -> String {
+fn generate_d1_module(
+  queries: List(ParsedQuery),
+  use_shared_types: Bool,
+  package_name: String,
+) -> String {
+  let shared_import = case use_shared_types {
+    True -> {
+      let module_path =
+        string.replace(package_name, "-", "_") <> ".gen.sql_shared"
+      "\nimport " <> module_path <> ".{type FindUserRow, type CreateUserRow}"
+    }
+    False -> ""
+  }
+
   let imports =
     "import gleam/dynamic/decode\nimport gleam/javascript/promise\nimport gleam/option.{type Option, None, Some}\nimport gflare/d1\nimport gflare/error.{type Error}"
+    <> shared_import
 
-  let types = list.map(queries, generate_d1_row_type) |> string.join("\n\n")
+  let types = case use_shared_types {
+    True -> ""
+    False -> list.map(queries, generate_row_type) |> string.join("\n\n")
+  }
 
   let functions = list.map(queries, generate_d1_function) |> string.join("\n\n")
 
-  [imports, "", types, "", functions] |> string.join("\n")
+  case types {
+    "" -> [imports, "", functions] |> string.join("\n")
+    _ -> [imports, "", types, "", functions] |> string.join("\n")
+  }
 }
 
-fn generate_turso_module(queries: List(ParsedQuery)) -> String {
+fn generate_turso_module(
+  queries: List(ParsedQuery),
+  use_shared_types: Bool,
+  package_name: String,
+) -> String {
+  let shared_import = case use_shared_types {
+    True -> {
+      let module_path =
+        string.replace(package_name, "-", "_") <> ".gen.sql_shared"
+      "\nimport " <> module_path <> ".{type FindUserRow, type CreateUserRow}"
+    }
+    False -> ""
+  }
+
   let imports =
     "import gleam/dynamic/decode\nimport gleam/javascript/promise\nimport gleam/option.{type Option, None, Some}\nimport gflare/turso\nimport gflare/turso/error.{type TursoError}"
+    <> shared_import
 
-  let types = list.map(queries, generate_turso_row_type) |> string.join("\n\n")
+  let types = case use_shared_types {
+    True -> ""
+    False -> list.map(queries, generate_row_type) |> string.join("\n\n")
+  }
 
   let functions =
     list.map(queries, generate_turso_function) |> string.join("\n\n")
 
-  [imports, "", types, "", functions] |> string.join("\n")
+  case types {
+    "" -> [imports, "", functions] |> string.join("\n")
+    _ -> [imports, "", types, "", functions] |> string.join("\n")
+  }
 }
 
-fn generate_d1_row_type(query: ParsedQuery) -> String {
+fn generate_row_type(query: ParsedQuery) -> String {
   case query.returns {
     [] -> ""
     fields -> {
@@ -70,10 +243,6 @@ fn generate_d1_row_type(query: ParsedQuery) -> String {
       <> ",\n)\n}"
     }
   }
-}
-
-fn generate_turso_row_type(query: ParsedQuery) -> String {
-  generate_d1_row_type(query)
 }
 
 fn generate_d1_function(query: ParsedQuery) -> String {

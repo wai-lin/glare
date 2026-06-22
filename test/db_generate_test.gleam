@@ -3,8 +3,8 @@ import gleeunit/should
 
 import gflare/cli/db/generate
 import gflare/cli/db/types.{
-  D1, GBitArray, GBool, GFloat, GInt, GOption, GString, ParsedQuery, QueryParam,
-  ResultSet, Turso,
+  Both, D1, GBitArray, GBool, GFloat, GInt, GOption, GString, ParsedQuery,
+  QueryParam, ResultSet, Turso,
 }
 import gleam/io
 import gleam/string
@@ -67,6 +67,7 @@ pub fn generate_d1_select_with_returns_test() {
         ResultSet(name: "name", gleam_type: GString),
       ],
       sql: "SELECT id, name FROM users WHERE id = ?1",
+      backends: [D1],
     ),
   ]
   let content = generate_and_read(queries, D1, "/tmp/test_d1_select.gleam")
@@ -90,6 +91,7 @@ pub fn generate_d1_insert_no_returns_test() {
       ],
       returns: [],
       sql: "INSERT INTO users (name, email) VALUES (?1, ?2)",
+      backends: [D1],
     ),
   ]
   let content = generate_and_read(queries, D1, "/tmp/test_d1_insert.gleam")
@@ -110,6 +112,7 @@ pub fn generate_d1_with_option_return_test() {
         ResultSet(name: "email", gleam_type: GOption(GString)),
       ],
       sql: "SELECT id, email FROM users WHERE id = ?1",
+      backends: [D1],
     ),
   ]
   let content = generate_and_read(queries, D1, "/tmp/test_d1_option.gleam")
@@ -130,6 +133,7 @@ pub fn generate_turso_select_with_returns_test() {
         ResultSet(name: "price", gleam_type: GFloat),
       ],
       sql: "SELECT id, name, price FROM items WHERE id = ?1",
+      backends: [Turso],
     ),
   ]
   let content =
@@ -155,6 +159,7 @@ pub fn generate_turso_insert_no_returns_test() {
       ],
       returns: [],
       sql: "INSERT INTO items (name, price) VALUES (?1, ?2)",
+      backends: [Turso],
     ),
   ]
   let content =
@@ -178,6 +183,7 @@ pub fn generate_multiple_queries_test() {
         ResultSet(name: "name", gleam_type: GString),
       ],
       sql: "SELECT id, name FROM users WHERE id = ?1",
+      backends: [D1],
     ),
     ParsedQuery(
       name: "list_users",
@@ -187,6 +193,7 @@ pub fn generate_multiple_queries_test() {
         ResultSet(name: "name", gleam_type: GString),
       ],
       sql: "SELECT id, name FROM users",
+      backends: [D1],
     ),
   ]
   let content = generate_and_read(queries, D1, "/tmp/test_multi.gleam")
@@ -205,6 +212,7 @@ pub fn generate_sql_with_quotes_test() {
       params: [QueryParam(name: "term", gleam_type: GString)],
       returns: [],
       sql: "SELECT * FROM users WHERE name LIKE '%test%'",
+      backends: [D1],
     ),
   ]
   let content = generate_and_read(queries, D1, "/tmp/test_quotes.gleam")
@@ -219,6 +227,7 @@ pub fn generate_sql_with_newlines_test() {
       params: [],
       returns: [],
       sql: "SELECT\n  id,\n  name\nFROM users",
+      backends: [D1],
     ),
   ]
   let content = generate_and_read(queries, D1, "/tmp/test_newlines.gleam")
@@ -234,6 +243,7 @@ pub fn generate_d1_bool_param_test() {
       params: [QueryParam(name: "active", gleam_type: GBool)],
       returns: [],
       sql: "UPDATE users SET active = ?1",
+      backends: [D1],
     ),
   ]
   let content = generate_and_read(queries, D1, "/tmp/test_bool.gleam")
@@ -247,6 +257,7 @@ pub fn generate_d1_blob_param_test() {
       params: [QueryParam(name: "data", gleam_type: GBitArray)],
       returns: [],
       sql: "INSERT INTO files (data) VALUES (?1)",
+      backends: [D1],
     ),
   ]
   let content = generate_and_read(queries, D1, "/tmp/test_blob.gleam")
@@ -260,6 +271,7 @@ pub fn generate_turso_date_param_test() {
       params: [QueryParam(name: "created", gleam_type: GString)],
       returns: [],
       sql: "SELECT * FROM events WHERE date = ?1",
+      backends: [Turso],
     ),
   ]
   let content = generate_and_read(queries, Turso, "/tmp/test_date.gleam")
@@ -275,6 +287,7 @@ pub fn generate_no_params_test() {
       params: [],
       returns: [ResultSet(name: "count", gleam_type: GInt)],
       sql: "SELECT COUNT(*) as count FROM users",
+      backends: [D1],
     ),
   ]
   let content = generate_and_read(queries, D1, "/tmp/test_no_params.gleam")
@@ -289,7 +302,13 @@ pub fn generate_no_params_test() {
 
 pub fn generate_d1_imports_test() {
   let queries = [
-    ParsedQuery(name: "test", params: [], returns: [], sql: "SELECT 1"),
+    ParsedQuery(
+      name: "test",
+      params: [],
+      returns: [],
+      sql: "SELECT 1",
+      backends: [D1],
+    ),
   ]
   let content = generate_and_read(queries, D1, "/tmp/test_imports.gleam")
   should_contain(content, "import gleam/dynamic/decode")
@@ -301,7 +320,13 @@ pub fn generate_d1_imports_test() {
 
 pub fn generate_turso_imports_test() {
   let queries = [
-    ParsedQuery(name: "test", params: [], returns: [], sql: "SELECT 1"),
+    ParsedQuery(
+      name: "test",
+      params: [],
+      returns: [],
+      sql: "SELECT 1",
+      backends: [Turso],
+    ),
   ]
   let content =
     generate_and_read(queries, Turso, "/tmp/test_turso_imports.gleam")
@@ -326,6 +351,7 @@ pub fn generate_decoder_with_multiple_fields_test() {
         ResultSet(name: "active", gleam_type: GBool),
       ],
       sql: "SELECT * FROM complex_table",
+      backends: [D1],
     ),
   ]
   let content = generate_and_read(queries, D1, "/tmp/test_decoder.gleam")
@@ -339,9 +365,86 @@ pub fn generate_decoder_with_multiple_fields_test() {
 
 pub fn generate_invalid_path_test() {
   let queries = [
-    ParsedQuery(name: "test", params: [], returns: [], sql: "SELECT 1"),
+    ParsedQuery(
+      name: "test",
+      params: [],
+      returns: [],
+      sql: "SELECT 1",
+      backends: [D1],
+    ),
   ]
   let result =
     generate.generate_sql_module(queries, D1, "/nonexistent/dir/file.gleam")
   result |> should.be_error
+}
+
+// Dual backend tests
+
+pub fn generate_both_backends_test() {
+  let queries = [
+    ParsedQuery(
+      name: "find_user",
+      params: [QueryParam(name: "user_id", gleam_type: GInt)],
+      returns: [
+        ResultSet(name: "id", gleam_type: GInt),
+        ResultSet(name: "name", gleam_type: GString),
+      ],
+      sql: "SELECT id, name FROM users WHERE id = ?1",
+      backends: [D1, Turso],
+    ),
+  ]
+  // Use the multi-file generation for dual backend
+  let output_dir = "/tmp/test_both_gen"
+  let _ = simplifile.create_directory(output_dir)
+  let result =
+    generate.generate_sql_modules(queries, Both, output_dir, "test_app")
+  // Verify the result
+  case result {
+    Ok(Nil) -> Nil
+    Error(e) -> {
+      io.println(e)
+      should.fail()
+    }
+  }
+  // Verify the generated files
+  verify_dual_backend_output(output_dir)
+}
+
+fn verify_dual_backend_output(output_dir: String) {
+  let d1_path = output_dir <> "/d1_sql.gleam"
+  let turso_path = output_dir <> "/turso_sql.gleam"
+  let shared_path = output_dir <> "/sql_shared.gleam"
+
+  case simplifile.read(d1_path) {
+    Ok(content) -> {
+      should_contain(content, "pub fn find_user(")
+      should_contain(content, "d1.Database")
+      should_contain(content, "decode.int")
+    }
+    Error(_) -> should.fail()
+  }
+
+  case simplifile.read(turso_path) {
+    Ok(content) -> {
+      should_contain(content, "pub fn find_user(")
+      should_contain(content, "turso.Config")
+      should_contain(content, "turso.int(user_id)")
+    }
+    Error(_) -> should.fail()
+  }
+
+  case simplifile.read(shared_path) {
+    Ok(content) -> {
+      should_contain(content, "pub type FindUserRow")
+      should_contain(content, "id: Int")
+      should_contain(content, "name: String")
+    }
+    Error(_) -> should.fail()
+  }
+
+  // Clean up
+  let _ = simplifile.delete(d1_path)
+  let _ = simplifile.delete(turso_path)
+  let _ = simplifile.delete(shared_path)
+  let _ = simplifile.delete(output_dir)
 }

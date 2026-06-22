@@ -26,12 +26,14 @@ pub type ParsedQuery {
     params: List(QueryParam),
     returns: List(ResultSet),
     sql: String,
+    backends: List(DbBackend),
   )
 }
 
 pub type DbBackend {
   D1
   Turso
+  Both
 }
 
 pub type MigrationFile {

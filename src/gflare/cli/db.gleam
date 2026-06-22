@@ -1,7 +1,7 @@
 import argv
 import gflare/cli/db/generate
 import gflare/cli/db/parse_sql
-import gflare/cli/db/types.{D1, Turso}
+import gflare/cli/db/types.{Both, D1, Turso}
 import gflare/cli/toml_utils
 import gflare/env
 import gflare/migrate
@@ -25,6 +25,7 @@ pub fn run() -> Nil {
       io.println(
         "  generate                    Generate Gleam code from *.sql files",
       )
+      io.println("  generate --backend both     Generate for both D1 and Turso")
       io.println("  migrate create <name>       Create a new migration file")
       io.println("  migrate list                List pending migrations")
       io.println("  migrate run                 Apply pending migrations")
@@ -35,6 +36,7 @@ pub fn run() -> Nil {
 fn run_generate(args: List(String)) -> Nil {
   let backend = case args {
     ["--backend", "turso", ..] -> Turso
+    ["--backend", "both", ..] -> Both
     _ -> D1
   }
 
@@ -46,9 +48,15 @@ fn run_generate(args: List(String)) -> Nil {
           case sql_files {
             [] -> io.println("No .sql files found in src/")
             _ -> {
+              let default_backends = case backend {
+                Both -> [D1, Turso]
+                D1 -> [D1]
+                Turso -> [Turso]
+              }
+
               let queries =
                 list.filter_map(sql_files, fn(path) {
-                  case parse_sql.parse_file(path) {
+                  case parse_sql.parse_file(path, default_backends) {
                     Ok(q) -> Ok(q)
                     Error(e) -> {
                       io.println_error("Warning: " <> e.message)
@@ -58,20 +66,24 @@ fn run_generate(args: List(String)) -> Nil {
                 })
 
               let package_name = config.package_name
-              let output_dir = "src/" <> string.replace(package_name, "-", "_")
-              let output_path = output_dir <> "/sql.gleam"
+              let output_dir = "src/gen"
 
               case simplifile.create_directory_all(output_dir) {
                 Ok(Nil) -> {
                   case
-                    generate.generate_sql_module(queries, backend, output_path)
+                    generate.generate_sql_modules(
+                      queries,
+                      backend,
+                      output_dir,
+                      package_name,
+                    )
                   {
                     Ok(Nil) ->
                       io.println(
                         "Generated "
                         <> int_to_string(list.length(queries))
                         <> " functions in "
-                        <> output_path,
+                        <> output_dir,
                       )
                     Error(e) -> io.println_error("Error: " <> e)
                   }
@@ -182,6 +194,13 @@ fn run_migrations(args: List(String)) -> Nil {
       io.println("Or use --turso flag to apply migrations to a Turso database.")
     }
     Turso -> run_turso_migrations()
+    Both -> {
+      io.println("Running migrations for both backends...")
+      io.println(
+        "Use 'wrangler d1 migrations apply <binding_name>' to apply D1 migrations.",
+      )
+      run_turso_migrations()
+    }
   }
 }
 

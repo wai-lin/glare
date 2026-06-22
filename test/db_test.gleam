@@ -108,7 +108,8 @@ pub fn gleam_type_to_d1_bind_string_test() {
 }
 
 pub fn gleam_type_to_d1_bind_option_test() {
-  types.gleam_type_to_d1_bind(GOption(GInt)) |> should.equal("d1.null_value")
+  types.gleam_type_to_d1_bind(GOption(GInt))
+  |> should.equal("d1.null_value")
 }
 
 // Type to Turso value tests
@@ -131,7 +132,7 @@ pub fn gleam_type_to_turso_value_option_test() {
 pub fn parse_simple_select_test() {
   let sql =
     "-- params: user_id: Int\n-- returns: id: Int, name: String\nSELECT id, name FROM users WHERE id = ?1"
-  case parse_sql.parse_file_content(sql) {
+  case parse_sql.parse_file_content(sql, [D1]) {
     Ok(query) -> {
       query.name |> should.equal("")
       list.length(query.params) |> should.equal(1)
@@ -149,7 +150,7 @@ pub fn parse_simple_select_test() {
 pub fn parse_insert_test() {
   let sql =
     "-- params: name: String, email: String\nINSERT INTO users (name, email) VALUES (?1, ?2)"
-  case parse_sql.parse_file_content(sql) {
+  case parse_sql.parse_file_content(sql, [D1]) {
     Ok(query) -> {
       query.name |> should.equal("")
       list.length(query.params) |> should.equal(2)
@@ -166,7 +167,7 @@ pub fn parse_insert_test() {
 pub fn parse_with_options_test() {
   let sql =
     "-- params: user_id: Int\n-- returns: id: Int, name: String, email: Option(String)\nSELECT id, name, email FROM users WHERE id = ?1"
-  case parse_sql.parse_file_content(sql) {
+  case parse_sql.parse_file_content(sql, [D1]) {
     Ok(query) -> {
       list.length(query.returns) |> should.equal(3)
       case query.returns {
@@ -184,7 +185,7 @@ pub fn parse_with_options_test() {
 
 pub fn parse_no_annotations_test() {
   let sql = "SELECT * FROM users"
-  case parse_sql.parse_file_content(sql) {
+  case parse_sql.parse_file_content(sql, [D1]) {
     Ok(query) -> {
       list.length(query.params) |> should.equal(0)
       list.length(query.returns) |> should.equal(0)
@@ -199,7 +200,7 @@ pub fn parse_no_annotations_test() {
 
 pub fn parse_empty_sql_test() {
   let sql = "-- just a comment\n"
-  case parse_sql.parse_file_content(sql) {
+  case parse_sql.parse_file_content(sql, [D1]) {
     Ok(_) -> should.fail()
     Error(_) -> Nil
   }
@@ -208,7 +209,7 @@ pub fn parse_empty_sql_test() {
 pub fn parse_multiline_query_test() {
   let sql =
     "-- params: user_id: Int\n-- returns: id: Int, name: String\nSELECT\n  id,\n  name\nFROM users\nWHERE id = ?1"
-  case parse_sql.parse_file_content(sql) {
+  case parse_sql.parse_file_content(sql, [D1]) {
     Ok(query) -> {
       string.contains(query.sql, "SELECT") |> should.be_true()
       string.contains(query.sql, "FROM users") |> should.be_true()
@@ -232,6 +233,7 @@ pub fn generate_d1_module_test() {
         ResultSet(name: "name", gleam_type: GString),
       ],
       sql: "SELECT id, name FROM users WHERE id = ?1",
+      backends: [D1],
     ),
   ]
   case generate.generate_sql_module(queries, D1, "/tmp/test_sql.gleam") {
@@ -253,6 +255,7 @@ pub fn generate_turso_module_test() {
         ResultSet(name: "name", gleam_type: GString),
       ],
       sql: "SELECT id, name FROM users WHERE id = ?1",
+      backends: [Turso],
     ),
   ]
   case
@@ -261,6 +264,60 @@ pub fn generate_turso_module_test() {
     Ok(Nil) -> Nil
     Error(e) -> {
       io.println(e)
+      should.fail()
+    }
+  }
+}
+
+// Backend parsing tests
+
+pub fn parse_backend_d1_test() {
+  let sql = "-- backend: d1\nSELECT * FROM users"
+  case parse_sql.parse_file_content(sql, [D1, Turso]) {
+    Ok(query) -> {
+      query.backends |> should.equal([D1])
+    }
+    Error(e) -> {
+      io.println(e.message)
+      should.fail()
+    }
+  }
+}
+
+pub fn parse_backend_turso_test() {
+  let sql = "-- backend: turso\nSELECT * FROM users"
+  case parse_sql.parse_file_content(sql, [D1, Turso]) {
+    Ok(query) -> {
+      query.backends |> should.equal([Turso])
+    }
+    Error(e) -> {
+      io.println(e.message)
+      should.fail()
+    }
+  }
+}
+
+pub fn parse_backend_both_test() {
+  let sql = "-- backend: d1, turso\nSELECT * FROM users"
+  case parse_sql.parse_file_content(sql, [D1]) {
+    Ok(query) -> {
+      query.backends |> should.equal([D1, Turso])
+    }
+    Error(e) -> {
+      io.println(e.message)
+      should.fail()
+    }
+  }
+}
+
+pub fn parse_backend_default_test() {
+  let sql = "SELECT * FROM users"
+  case parse_sql.parse_file_content(sql, [D1]) {
+    Ok(query) -> {
+      query.backends |> should.equal([D1])
+    }
+    Error(e) -> {
+      io.println(e.message)
       should.fail()
     }
   }

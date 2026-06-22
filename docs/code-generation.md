@@ -6,7 +6,7 @@ gflare can generate typed Gleam functions from SQL files. Write SQL with type an
 
 1. Write SQL in `*.sql` files with type annotations
 2. Run `gleam run -m gflare -- db generate`
-3. gflare generates a `.gleam` module with typed functions
+3. gflare generates `.gleam` modules in `src/gen/`
 
 ## SQL File Format
 
@@ -25,6 +25,30 @@ SELECT id, name, email FROM users WHERE id = ?1
 INSERT INTO users (name, email) VALUES (?1, ?2)
 ```
 
+### Backend Selection
+
+You can specify which backend to generate for each SQL file using the `-- backend:` comment:
+
+```sql
+-- backend: d1
+-- params: user_id: Int
+SELECT * FROM users WHERE id = ?1
+```
+
+```sql
+-- backend: turso
+-- params: event_id: String
+SELECT * FROM events WHERE id = ?1
+```
+
+```sql
+-- backend: d1, turso
+-- params: user_id: Int
+SELECT * FROM users WHERE id = ?1
+```
+
+If no `-- backend:` comment is present, the CLI `--backend` flag is used as default.
+
 ## Generate Code
 
 ```bash
@@ -33,12 +57,40 @@ gleam run -m gflare -- db generate
 
 # Generate for Turso
 gleam run -m gflare -- db generate --backend turso
+
+# Generate for both D1 and Turso
+gleam run -m gflare -- db generate --backend both
 ```
 
-## Generated Code (D1)
+## Output Structure
+
+### Single Backend
+
+When using `--backend d1` or `--backend turso`:
+
+```
+src/gen/
+└── d1_sql.gleam    # or turso_sql.gleam (types inlined)
+```
+
+### Both Backends
+
+When using `--backend both`:
+
+```
+src/gen/
+├── sql_shared.gleam    # Shared row types
+├── d1_sql.gleam        # D1 functions (imports sql_shared)
+└── turso_sql.gleam     # Turso functions (imports sql_shared)
+```
+
+## Generated Code Examples
+
+### D1 (src/gen/d1_sql.gleam)
 
 ```gleam
-// AUTO-GENERATED - src/my_app/sql.gleam
+// AUTO-GENERATED - D1 SQL functions
+// Do not edit manually
 import gleam/dynamic/decode
 import gleam/javascript/promise
 import gleam/option.{type Option, None, Some}
@@ -72,12 +124,20 @@ pub fn find_user(
 }
 ```
 
-## Generated Code (Turso)
+### Turso (src/gen/turso_sql.gleam)
 
 ```gleam
-// AUTO-GENERATED
+// AUTO-GENERATED - Turso SQL functions
+// Do not edit manually
+import gleam/dynamic/decode
+import gleam/javascript/promise
+import gleam/option.{type Option, None, Some}
 import gflare/turso
 import gflare/turso/error.{type TursoError}
+
+pub type FindUserRow {
+  FindUserRow(id: Int, name: String, email: Option(String))
+}
 
 pub fn find_user(
   config: turso.Config,
@@ -88,6 +148,18 @@ pub fn find_user(
     "SELECT id, name, email FROM users WHERE id = ?1",
     [turso.int(user_id)],
   )
+}
+```
+
+### Shared Types (src/gen/sql_shared.gleam)
+
+```gleam
+// AUTO-GENERATED - shared types for SQL queries
+// Do not edit manually
+import gleam/option.{type Option}
+
+pub type FindUserRow {
+  FindUserRow(id: Int, name: String, email: Option(String))
 }
 ```
 
@@ -109,16 +181,17 @@ pub fn find_user(
 
 ## Using Generated Functions
 
+### D1
+
 ```gleam
-import my_app/sql
+import my_app/gen/d1_sql
 import gleam/io
 
 pub fn fetch(request, env, ctx) {
   case bindings.d1(env, "DB") {
     Error(e) -> handle_error(e)
     Ok(db) -> {
-      // Call the generated function
-      use result <- promise.await(sql.find_user(db, 42))
+      use result <- promise.await(d1_sql.find_user(db, 42))
       case result {
         Ok(user) -> {
           io.println("Found: " <> user.name)
@@ -131,11 +204,31 @@ pub fn fetch(request, env, ctx) {
 }
 ```
 
+### Turso
+
+```gleam
+import my_app/gen/turso_sql
+import gleam/io
+
+pub fn fetch(request, env, ctx) {
+  let config = turso.connect(url, token)
+  use result <- promise.await(turso_sql.find_user(config, 42))
+  case result {
+    Ok(user) -> {
+      io.println("Found: " <> user.name)
+      respond_with_user(user)
+    }
+    Error(e) -> handle_error(e)
+  }
+}
+```
+
 ## Strict Tables (Turso)
 
 Turso STRICT tables support additional types. Use the SQL type name:
 
 ```sql
+-- backend: turso
 -- src/my_app/sql/find_event.sql
 -- params: event_id: Uuid
 -- returns: id: Uuid, name: String, event_date: Date, metadata: Json
@@ -150,6 +243,19 @@ turso.date("2025-03-15")
 turso.timestamp("2025-03-15T10:30:00Z")
 turso.json_string("{\"key\": \"value\"}")
 ```
+
+## Backend Resolution
+
+| SQL Comment | CLI Flag | Result |
+|-------------|----------|--------|
+| `-- backend: d1` | `--backend both` | Generate D1 only |
+| `-- backend: turso` | `--backend both` | Generate Turso only |
+| `-- backend: d1, turso` | `--backend both` | Generate both |
+| `-- backend: d1` | `--backend d1` | Generate D1 only |
+| `-- backend: turso` | `--backend turso` | Generate Turso only |
+| *(no comment)* | `--backend d1` | Generate D1 only |
+| *(no comment)* | `--backend turso` | Generate Turso only |
+| *(no comment)* | `--backend both` | Generate both |
 
 ## Related
 

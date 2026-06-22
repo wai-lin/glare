@@ -1,6 +1,6 @@
 import gflare/cli/db/types.{
-  type ParsedQuery, type QueryParam, type ResultSet, ParsedQuery, QueryParam,
-  ResultSet, parse_gleam_type,
+  type DbBackend, type ParsedQuery, type QueryParam, type ResultSet, D1,
+  ParsedQuery, QueryParam, ResultSet, Turso, parse_gleam_type,
 }
 import gleam/list
 import gleam/result
@@ -44,7 +44,23 @@ fn parse_return_line(line: String) -> List(ResultSet) {
   })
 }
 
-fn parse_sql_content(content: String) -> Result(ParsedQuery, SqlParseError) {
+fn parse_backend_line(line: String) -> List(DbBackend) {
+  line
+  |> string.trim
+  |> string.split(",")
+  |> list.filter_map(fn(part) {
+    case string.trim(part) {
+      "d1" -> Ok(D1)
+      "turso" -> Ok(Turso)
+      _ -> Error(Nil)
+    }
+  })
+}
+
+fn parse_sql_content(
+  content: String,
+  default_backends: List(DbBackend),
+) -> Result(ParsedQuery, SqlParseError) {
   let lines = string.split(content, "\n")
 
   let params =
@@ -73,6 +89,26 @@ fn parse_sql_content(content: String) -> Result(ParsedQuery, SqlParseError) {
     })
     |> list.flatten
 
+  // Parse backend comment
+  let backends =
+    list.filter_map(lines, fn(line) {
+      let trimmed = string.trim(line)
+      case string.starts_with(trimmed, "-- backend:") {
+        True -> {
+          let backend_str = string.drop_start(trimmed, 11) |> string.trim
+          Ok(parse_backend_line(backend_str))
+        }
+        False -> Error(Nil)
+      }
+    })
+    |> list.flatten
+    |> fn(b) {
+      case b {
+        [] -> default_backends
+        _ -> b
+      }
+    }
+
   let sql_lines =
     list.filter_map(lines, fn(line) {
       let trimmed = string.trim(line)
@@ -90,14 +126,17 @@ fn parse_sql_content(content: String) -> Result(ParsedQuery, SqlParseError) {
 
   case sql {
     "" -> Error(ParseError(path: "", message: "No SQL query found"))
-    _ -> Ok(ParsedQuery(name: "", params:, returns:, sql:))
+    _ -> Ok(ParsedQuery(name: "", params:, returns:, sql:, backends:))
   }
 }
 
-pub fn parse_file(path: String) -> Result(ParsedQuery, SqlParseError) {
+pub fn parse_file(
+  path: String,
+  default_backends: List(DbBackend),
+) -> Result(ParsedQuery, SqlParseError) {
   case simplifile.read(path) {
     Ok(content) -> {
-      case parse_sql_content(content) {
+      case parse_sql_content(content, default_backends) {
         Ok(query) -> {
           let name = extract_name_from_path(path)
           Ok(ParsedQuery(..query, name:))
@@ -141,6 +180,7 @@ pub fn find_sql_files(dir: String) -> Result(List(String), SqlParseError) {
 
 pub fn parse_file_content(
   content: String,
+  default_backends: List(DbBackend),
 ) -> Result(ParsedQuery, SqlParseError) {
-  parse_sql_content(content)
+  parse_sql_content(content, default_backends)
 }
