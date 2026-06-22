@@ -89,7 +89,7 @@ All bindings are resolved from the Cloudflare Worker `env` object:
 ```gleam
 import gflare/bindings
 
-pub fn fetch(request, env: Env, ctx: Context) {
+pub fn fetch(request: HttpRequest, env: Env, ctx: Context) {
   let assert Ok(cache) = bindings.kv(env, "CACHE")
   let assert Ok(db) = bindings.d1(env, "DB")
   let assert Ok(bucket) = bindings.r2(env, "ASSETS")
@@ -106,7 +106,7 @@ pub fn fetch(request, env: Env, ctx: Context) {
 ```gleam
 import gflare/kv
 
-pub fn fetch(request, env: Env, ctx: Context) {
+pub fn fetch(request: HttpRequest, env: Env, ctx: Context) {
   let assert Ok(cache) = bindings.kv(env, "CACHE")
 
   // Get a value
@@ -228,7 +228,7 @@ Turso uses only `gleam_fetch` — no npm packages needed. Perfect for Cloudflare
 ```gleam
 import gflare/turso
 
-pub fn fetch(request, env: Env, ctx: Context) {
+pub fn fetch(request: HttpRequest, env: Env, ctx: Context) {
   let assert Ok(url) = bindings.var(env, "TURSO_DATABASE_URL")
   let assert Ok(token) = bindings.secret(env, "TURSO_AUTH_TOKEN")
   let config = turso.connect(url, token)
@@ -433,7 +433,7 @@ db/migrations/
 ```gleam
 import gflare/r2
 
-pub fn get_file(request, env: Env, ctx: Context) {
+pub fn get_file(request: HttpRequest, env: Env, ctx: Context) {
   let assert Ok(bucket) = bindings.r2(env, "ASSETS")
   let key = request.path(request)
 
@@ -495,7 +495,7 @@ import gflare/queue
 import gleam/json
 
 // Producer: send messages
-pub fn enqueue_job(request, env: Env, ctx: Context) {
+pub fn enqueue_job(request: HttpRequest, env: Env, ctx: Context) {
   let assert Ok(q) = bindings.queue_producer(env, "EVENTS")
   let message = json.object([
     #("type", json.string("email")),
@@ -506,7 +506,7 @@ pub fn enqueue_job(request, env: Env, ctx: Context) {
 }
 
 // Producer: send batch
-pub fn enqueue_batch(request, env: Env, ctx: Context) {
+pub fn enqueue_batch(request: HttpRequest, env: Env, ctx: Context) {
   let assert Ok(q) = bindings.queue_producer(env, "EVENTS")
   let messages = [
     json.object([#("type", json.string("email")), #("to", json.string("a@test.com"))]),
@@ -516,7 +516,7 @@ pub fn enqueue_batch(request, env: Env, ctx: Context) {
 }
 
 // Consumer: process messages
-pub fn queue(batch, env: Env, ctx: Context) {
+pub fn queue(batch: dynamic.Dynamic, env: Env, ctx: Context) {
   list.each(batch.messages, fn(msg) {
     let body = queue.message_body(msg)
     let id = queue.message_id(msg)
@@ -536,7 +536,7 @@ pub fn queue(batch, env: Env, ctx: Context) {
 ```gleam
 import gflare/durable_object
 
-pub fn fetch(request, env: Env, ctx: Context) {
+pub fn fetch(request: HttpRequest, env: Env, ctx: Context) {
   let assert Ok(ns) = bindings.durable_object(env, "COUNTER")
 
   // Get a deterministic ID from a name
@@ -571,7 +571,7 @@ use result <- promise.await(durable_object.get_alarm(stub))
 ```gleam
 import gflare/request
 
-pub fn handler(request, env: Env, ctx: Context) {
+pub fn handler(request: HttpRequest, env: Env, ctx: Context) {
   let url = request.url(request)
   let method = request.method(request)
   let headers = request.headers(request)
@@ -627,7 +627,7 @@ response.redirect("https://example.com", 302)
 ```gleam
 import gflare/worker
 
-pub fn fetch(request, env: Env, ctx: Context) {
+pub fn fetch(request: HttpRequest, env: Env, ctx: Context) {
   // Extend worker lifetime for background work
   use _ <- promise.await(background_task(env))
   worker.wait_until(ctx, background_promise)
