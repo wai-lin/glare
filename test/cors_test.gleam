@@ -2,8 +2,6 @@ import gleeunit
 import gleeunit/should
 
 import gflare/middleware/cors
-import gleam/list
-import gleam/option.{None, Some}
 
 pub fn main() {
   gleeunit.main()

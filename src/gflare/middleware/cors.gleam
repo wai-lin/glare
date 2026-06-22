@@ -1,6 +1,6 @@
 import gflare/request.{type HttpRequest}
 import gflare/response.{type Response}
-import gflare/router.{type Middleware, type RouteParams}
+import gflare/router.{type Middleware}
 import gleam/javascript/promise
 import gleam/list
 import gleam/option.{type Option, None, Some}

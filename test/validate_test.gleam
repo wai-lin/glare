@@ -2,9 +2,6 @@ import gleeunit
 import gleeunit/should
 
 import gflare/validate
-import gleam/dynamic
-import gleam/json
-import gleam/option.{None, Some}
 
 pub fn main() {
   gleeunit.main()

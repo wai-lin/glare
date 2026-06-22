@@ -2,7 +2,6 @@ import gleeunit
 import gleeunit/should
 
 import gflare/middleware/rate_limit
-import gleam/option.{None, Some}
 
 pub fn main() {
   gleeunit.main()
@@ -29,7 +28,6 @@ pub fn allowed_result_test() {
   let result = rate_limit.Allowed(remaining: 50)
   case result {
     rate_limit.Allowed(remaining) -> remaining |> should.equal(50)
-    _ -> should.fail()
   }
 }
 
@@ -37,7 +35,6 @@ pub fn denied_result_test() {
   let result = rate_limit.Denied(retry_after: 60)
   case result {
     rate_limit.Denied(retry_after) -> retry_after |> should.equal(60)
-    _ -> should.fail()
   }
 }
 
