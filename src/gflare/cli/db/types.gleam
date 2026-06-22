@@ -36,10 +36,6 @@ pub type DbBackend {
   Both
 }
 
-pub type MigrationFile {
-  MigrationFile(version: Int, name: String, path: String, sql: String)
-}
-
 pub fn gleam_type_to_string(t: GleamType) -> String {
   case t {
     GInt -> "Int"
