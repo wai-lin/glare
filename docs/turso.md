@@ -159,9 +159,160 @@ pub type TursoError {
 
 Convert to string with `turso_err.to_string(e)`.
 
+## Platform API
+
+The Platform API lets you manage Turso databases programmatically. Use it for multi-tenant SaaS, automated database provisioning, or infrastructure management.
+
+### Setup
+
+```gleam
+import gflare/turso/cloud
+import gflare/turso/error as turso_err
+
+// Create a CloudConfig with your org and platform API token
+let api = cloud.connect("my-org", "platform-api-token")
+```
+
+### Database Management
+
+#### Create a database
+
+```gleam
+use result <- promise.await(cloud.create_database(api, "tenant-abc", "default"))
+case result {
+  Ok(db) -> {
+    // db.name, db.db_id, db.hostname, db.group, db.primary_region
+    io.println("Created: " <> db.hostname)
+  }
+  Error(e) -> io.println_error(turso_err.to_string(e))
+}
+```
+
+#### List all databases
+
+```gleam
+use result <- promise.await(cloud.list_databases(api))
+case result {
+  Ok(databases) -> {
+    list.each(databases, fn(db) {
+      io.println(db.name <> " - " <> db.hostname)
+    })
+  }
+  Error(e) -> io.println_error(turso_err.to_string(e))
+}
+```
+
+#### Get database info
+
+```gleam
+use result <- promise.await(cloud.retrieve_database(api, "tenant-abc"))
+case result {
+  Ok(db) -> io.println("Hostname: " <> db.hostname)
+  Error(e) -> io.println_error(turso_err.to_string(e))
+}
+```
+
+#### Delete a database
+
+```gleam
+use result <- promise.await(cloud.delete_database(api, "tenant-abc"))
+case result {
+  Ok(Nil) -> io.println("Deleted!")
+  Error(e) -> io.println_error(turso_err.to_string(e))
+}
+```
+
+### Token Management
+
+Create scoped auth tokens for database access:
+
+```gleam
+use result <- promise.await(cloud.create_token(api, "tenant-abc", "2w", "full-access"))
+case result {
+  Ok(token) -> {
+    // token.jwt is the auth token
+    let config = turso.connect("lib://" <> db.hostname, token.jwt)
+    // Use config for database operations
+  }
+  Error(e) -> io.println_error(turso_err.to_string(e))
+}
+```
+
+Token expiration formats: `"1h"`, `"2w"`, `"10y"` (hours, weeks, years).
+Authorization levels: `"full-access"`, `"read-only"`.
+
+### Group Management
+
+```gleam
+// Create a group
+use _ <- promise.await(cloud.create_group(api, "my-group"))
+
+// List all groups
+use result <- promise.await(cloud.list_groups(api))
+case result {
+  Ok(groups) -> {
+    list.each(groups, fn(group) {
+      io.println(group.name <> " - " <> group.location)
+    })
+  }
+  Error(e) -> io.println_error(turso_err.to_string(e))
+}
+
+// Delete a group
+use _ <- promise.await(cloud.delete_group(api, "my-group"))
+```
+
+### Multi-Tenant Example
+
+Create a new tenant with database and migrations:
+
+```gleam
+import gflare/migrate
+import gflare/turso
+import gflare/turso/cloud
+import gflare/turso/error as turso_err
+
+pub fn create_tenant(api, tenant_id) {
+  // 1. Create database
+  use result <- promise.await(cloud.create_database(api, tenant_id, "default"))
+  case result {
+    Error(e) -> promise.resolve(Error(e))
+    Ok(db) -> {
+      // 2. Generate auth token
+      use token_result <- promise.await(
+        cloud.create_token(api, tenant_id, "10y", "full-access"),
+      )
+      case token_result {
+        Error(e) -> promise.resolve(Error(e))
+        Ok(token) -> {
+          // 3. Connect and apply migrations
+          let config = turso.connect("lib://" <> db.hostname, token.jwt)
+          use _ <- promise.await(migrate.run_turso(config, "db/migrations"))
+          promise.resolve(Ok(Nil))
+        }
+      }
+    }
+  }
+}
+```
+
+### Platform API Functions
+
+| Function | Returns | Description |
+|----------|---------|-------------|
+| `cloud.connect(org, token)` | `CloudConfig` | Create API config |
+| `cloud.create_database(config, name, group)` | `Promise(Result(Database, TursoError))` | Create a database |
+| `cloud.delete_database(config, name)` | `Promise(Result(Nil, TursoError))` | Delete a database |
+| `cloud.retrieve_database(config, name)` | `Promise(Result(Database, TursoError))` | Get database info |
+| `cloud.list_databases(config)` | `Promise(Result(List(Database), TursoError))` | List all databases |
+| `cloud.create_token(config, db_name, expiration, authorization)` | `Promise(Result(TokenResult, TursoError))` | Create auth token |
+| `cloud.create_group(config, name)` | `Promise(Result(Group, TursoError))` | Create a group |
+| `cloud.delete_group(config, name)` | `Promise(Result(Nil, TursoError))` | Delete a group |
+| `cloud.list_groups(config)` | `Promise(Result(List(Group), TursoError))` | List all groups |
+
 ## Related
 
-- [Turso Platform API](turso.md#platform-api) — manage databases programmatically
+- [Platform API](#platform-api) — manage databases programmatically
 - [Code Generation](code-generation.md) — auto-generate typed functions from SQL
 - [Migrations](migrations.md) — manage database schema
 - [Error Handling](error-handling.md) — error handling patterns
