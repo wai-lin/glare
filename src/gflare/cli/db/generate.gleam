@@ -134,7 +134,7 @@ fn write_file(path: String, content: String) -> Result(Nil, String) {
 
 fn generate_shared_types(
   queries: List(ParsedQuery),
-  package_name: String,
+  _package_name: String,
 ) -> String {
   let queries_with_returns = list.filter(queries, fn(q) { q.returns != [] })
   let types =

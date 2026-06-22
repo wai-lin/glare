@@ -3,7 +3,7 @@ import gflare/request.{type HttpRequest}
 import gflare/response.{type Response}
 import gflare/worker.{type Context}
 import gleam/javascript/promise.{type Promise}
-import gleam/json.{type Json}
+import gleam/json
 import gleam/list
 import gleam/option.{type Option, None, Some}
 import gleam/string
