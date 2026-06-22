@@ -21,6 +21,7 @@ pub type ValidationError {
 
 // Basic type schemas
 
+/// Create a string schema for the given field.
 pub fn string(field: String) -> Schema(String) {
   Schema(
     decode: fn(data) {
@@ -33,6 +34,7 @@ pub fn string(field: String) -> Schema(String) {
   )
 }
 
+/// Create an integer schema for the given field.
 pub fn int(field: String) -> Schema(Int) {
   Schema(
     decode: fn(data) {
@@ -347,6 +349,7 @@ pub fn custom(
 
 // Validation functions
 
+/// Validate data against a schema. Returns Ok(value) or Error(list of validation errors).
 pub fn validate(
   schema: Schema(a),
   data: Dynamic,
@@ -354,6 +357,7 @@ pub fn validate(
   schema.decode(data)
 }
 
+/// Validate request body against a schema. Returns Ok(value) or Error(list of validation errors).
 pub fn validate_body(
   schema: Schema(a),
   request: HttpRequest,
@@ -368,6 +372,7 @@ pub fn validate_body(
 
 // Error formatting
 
+/// Format validation errors as JSON for API responses.
 pub fn format_errors(errors: List(ValidationError)) -> json.Json {
   json.array(errors, fn(e) {
     json.object([

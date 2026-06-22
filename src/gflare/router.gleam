@@ -52,6 +52,7 @@ pub type RouterConfig {
 
 // Constructor
 
+/// Create a new empty router.
 pub fn new() -> Router {
   Router(
     tree: new_node(),
@@ -71,30 +72,37 @@ pub fn new_with_config(_config: RouterConfig) -> Router {
 
 // Route builders
 
+/// Add a GET route to the router.
 pub fn get(router: Router, path: String, handler: Handler) -> Router {
   add_route(router, "GET", path, handler)
 }
 
+/// Add a POST route to the router.
 pub fn post(router: Router, path: String, handler: Handler) -> Router {
   add_route(router, "POST", path, handler)
 }
 
+/// Add a PUT route to the router.
 pub fn put(router: Router, path: String, handler: Handler) -> Router {
   add_route(router, "PUT", path, handler)
 }
 
+/// Add a DELETE route to the router.
 pub fn delete(router: Router, path: String, handler: Handler) -> Router {
   add_route(router, "DELETE", path, handler)
 }
 
+/// Add a PATCH route to the router.
 pub fn patch(router: Router, path: String, handler: Handler) -> Router {
   add_route(router, "PATCH", path, handler)
 }
 
+/// Add an OPTIONS route to the router.
 pub fn options(router: Router, path: String, handler: Handler) -> Router {
   add_route(router, "OPTIONS", path, handler)
 }
 
+/// Add a route for all HTTP methods.
 pub fn any(router: Router, path: String, handler: Handler) -> Router {
   router
   |> add_route("GET", path, handler)
@@ -106,6 +114,7 @@ pub fn any(router: Router, path: String, handler: Handler) -> Router {
 
 // Middleware
 
+/// Add global middleware to the router.
 pub fn with_middleware(router: Router, middleware: Middleware) -> Router {
   Router(
     ..router,
@@ -115,6 +124,7 @@ pub fn with_middleware(router: Router, middleware: Middleware) -> Router {
 
 // Groups
 
+/// Create a route group with a shared prefix and middleware.
 pub fn group(
   router: Router,
   prefix: String,
@@ -134,10 +144,12 @@ pub fn group(
 
 // Error handling
 
+/// Set a custom 404 handler for the router.
 pub fn not_found(router: Router, handler: Handler) -> Router {
   Router(..router, not_found_handler: handler)
 }
 
+/// Set a custom error handler for the router.
 pub fn on_error(
   router: Router,
   handler: fn(HttpRequest, String) -> Response,
@@ -147,6 +159,7 @@ pub fn on_error(
 
 // Serve
 
+/// Serve a request using the router. Returns a Promise with the response.
 pub fn serve(
   router: Router,
   request: HttpRequest,
@@ -203,10 +216,12 @@ pub fn serve(
 
 // Route params
 
+/// Get a route parameter by name. Returns Some(value) if found, None otherwise.
 pub fn get_param(params: RouteParams, name: String) -> Option(String) {
   find_param(params.params, name)
 }
 
+/// Get a route parameter by name with a default value if not found.
 pub fn get_param_or(
   params: RouteParams,
   name: String,
