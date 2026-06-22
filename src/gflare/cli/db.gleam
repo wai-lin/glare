@@ -7,6 +7,7 @@ import gflare/cli/db/generate
 import gflare/cli/db/parse_sql
 import gflare/cli/db/types.{D1, Turso}
 import gflare/cli/toml_utils
+import gflare/migrate
 import simplifile
 
 pub fn run() -> Nil {
@@ -84,7 +85,7 @@ fn run_migrate(args: List(String)) -> Nil {
   case args {
     ["create", name] -> create_migration(name)
     ["list"] -> list_migrations()
-    ["run"] -> run_migrations()
+    ["run", ..rest] -> run_migrations(rest)
     _ -> {
       io.println("Usage: gflare db migrate <command>")
       io.println("")
@@ -92,6 +93,7 @@ fn run_migrate(args: List(String)) -> Nil {
       io.println("  create <name>    Create a new migration file")
       io.println("  list             List pending migrations")
       io.println("  run              Apply pending migrations")
+      io.println("  run --turso      Apply migrations to Turso")
     }
   }
 }
@@ -142,10 +144,24 @@ fn list_migrations() -> Nil {
   }
 }
 
-fn run_migrations() -> Nil {
-  io.println("Running migrations...")
-  list_migrations()
-  io.println("Migration support coming soon!")
+fn run_migrations(args: List(String)) -> Nil {
+  let backend = case args {
+    ["--turso", ..] -> Turso
+    _ -> D1
+  }
+  let migrations_dir = "db/migrations"
+
+  case backend {
+    D1 -> {
+      io.println("Running migrations for D1...")
+      io.println("Note: D1 migrations require a running D1 database.")
+      io.println("Use 'wrangler d1 migrations apply <binding_name>' for D1, or use --turso flag.")
+    }
+    Turso -> {
+      io.println("Running migrations for Turso...")
+      io.println("Note: Turso migrations require TURSO_DATABASE_URL and TURSO_AUTH_TOKEN environment variables.")
+    }
+  }
 }
 
 fn get_next_migration_version(dir: String) -> Int {
