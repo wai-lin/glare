@@ -37,6 +37,32 @@ export function response_json(response, data) {
   });
 }
 
+export function append_header(response, name, value) {
+  const headers = new Headers(response.headers);
+  headers.append(name, value);
+  return new Response(response.body, {
+    status: response.status,
+    headers,
+  });
+}
+
+export function get_response_header(response, name) {
+  const value = response.headers.get(name);
+  if (value === null || value === undefined) {
+    return new Error("Header not found: " + name);
+  }
+  return new Ok(value);
+}
+
+export function remove_response_header(response, name) {
+  const headers = new Headers(response.headers);
+  headers.delete(name);
+  return new Response(response.body, {
+    status: response.status,
+    headers,
+  });
+}
+
 export function response_bytes(response, data) {
   return new Response(data, {
     status: response.status,
