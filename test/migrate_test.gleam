@@ -29,35 +29,35 @@ pub fn migration_construction_test() {
   migration.sql |> should.equal("CREATE TABLE users (id INTEGER PRIMARY KEY)")
 }
 
-// parse_version tests
+// parse_version tests (now using int.parse)
 
 pub fn parse_version_single_digit_test() {
-  parse.parse_version("1") |> should.equal(Ok(1))
+  int.parse("1") |> should.equal(Ok(1))
 }
 
 pub fn parse_version_multi_digit_test() {
-  parse.parse_version("0001") |> should.equal(Ok(1))
+  int.parse("0001") |> should.equal(Ok(1))
 }
 
 pub fn parse_version_large_number_test() {
-  parse.parse_version("12345") |> should.equal(Ok(12_345))
+  int.parse("12345") |> should.equal(Ok(12_345))
 }
 
 pub fn parse_version_zero_test() {
-  parse.parse_version("0") |> should.equal(Ok(0))
+  int.parse("0") |> should.equal(Ok(0))
 }
 
 pub fn parse_version_invalid_test() {
-  parse.parse_version("abc") |> should.equal(Error(Nil))
+  int.parse("abc") |> should.equal(Error(Nil))
 }
 
 pub fn parse_version_mixed_test() {
-  parse.parse_version("12abc") |> should.equal(Error(Nil))
+  int.parse("12abc") |> should.equal(Error(Nil))
 }
 
 pub fn parse_version_empty_test() {
-  // Empty string returns Ok(0) since try_fold on empty list returns initial acc
-  parse.parse_version("") |> should.equal(Ok(0))
+  // Empty string returns Error(Nil) since int.parse can't parse empty string
+  int.parse("") |> should.equal(Error(Nil))
 }
 
 // parse_version_from_name tests
@@ -80,8 +80,8 @@ pub fn parse_version_from_name_invalid_version_test() {
 
 pub fn parse_version_from_name_empty_test() {
   // Empty string split returns [""] which tries to parse "" as version
-  // This returns Ok(0) since try_fold on empty list returns initial acc
-  parse.parse_version_from_name("") |> should.equal(Ok(0))
+  // int.parse("") returns Error(Nil) since empty string is not a valid integer
+  parse.parse_version_from_name("") |> should.equal(Error(Nil))
 }
 
 // int_compare tests

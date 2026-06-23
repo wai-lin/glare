@@ -95,6 +95,12 @@ pub fn set_cors_headers(
 
 pub fn is_preflight(request: HttpRequest) -> Bool {
   request.method(request) == "OPTIONS"
+  && has_header(request, "access-control-request-method")
+}
+
+fn has_header(request: HttpRequest, name: String) -> Bool {
+  let headers = request.headers(request)
+  list.any(headers, fn(h) { h.0 == name })
 }
 
 pub fn get_origin(request: HttpRequest) -> Option(String) {

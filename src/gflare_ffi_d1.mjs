@@ -13,7 +13,7 @@ export function d1_text(value) {
 }
 
 export function d1_bool(value) {
-  return value ? 1 : 0;
+  return value;
 }
 
 export function d1_blob(value) {

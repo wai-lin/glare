@@ -130,3 +130,24 @@ pub fn gleam_type_to_turso_value(t: GleamType) -> String {
     GJson -> "turso.json_string"
   }
 }
+
+pub fn gleam_type_to_turso_extractor(t: GleamType) -> String {
+  case t {
+    GInt -> "fn(v) { case v { turso.types.Integer(i) -> i, _ -> 0 } }"
+    GFloat -> "fn(v) { case v { turso.types.Float(f) -> f, _ <- 0.0 } }"
+    GString -> "fn(v) { case v { turso.types.Text(s) -> s, _ -> \"\" } }"
+    GBool -> "fn(v) { case v { turso.types.Integer(i) -> i != 0, _ -> False } }"
+    GBitArray -> "fn(v) { case v { turso.types.Blob(b) -> b, _ -> <<>> } }"
+    GOption(inner) -> {
+      let inner_extractor = gleam_type_to_turso_extractor(inner)
+      "fn(v) { case v { turso.types.Null -> None, _ -> Some("
+      <> inner_extractor
+      <> "(v)) } }"
+    }
+    GDate -> "fn(v) { case v { turso.types.Text(s) -> s, turso.types.Date(s) -> s, _ -> \"\" } }"
+    GTime -> "fn(v) { case v { turso.types.Text(s) -> s, turso.types.Time(s) -> s, _ -> \"\" } }"
+    GTimestamp -> "fn(v) { case v { turso.types.Text(s) -> s, turso.types.Timestamp(s) -> s, _ -> \"\" } }"
+    GUuid -> "fn(v) { case v { turso.types.Text(s) -> s, turso.types.Uuid(s) -> s, _ -> \"\" } }"
+    GJson -> "fn(v) { case v { turso.types.Text(s) -> s, turso.types.JsonString(s) -> s, _ -> \"\" } }"
+  }
+}

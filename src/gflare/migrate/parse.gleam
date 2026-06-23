@@ -39,28 +39,9 @@ pub fn parse_migration_file(path: String) -> Result(Migration, String) {
 
 pub fn parse_version_from_name(name: String) -> Result(Int, Nil) {
   case string.split(name, "_") {
-    [version_str, ..] -> parse_version(version_str)
+    [version_str, ..] -> int.parse(version_str)
     _ -> Error(Nil)
   }
-}
-
-pub fn parse_version(s: String) -> Result(Int, Nil) {
-  let digits = string.to_graphemes(s)
-  list.try_fold(digits, 0, fn(acc, c) {
-    case c {
-      "0" -> Ok(acc * 10)
-      "1" -> Ok(acc * 10 + 1)
-      "2" -> Ok(acc * 10 + 2)
-      "3" -> Ok(acc * 10 + 3)
-      "4" -> Ok(acc * 10 + 4)
-      "5" -> Ok(acc * 10 + 5)
-      "6" -> Ok(acc * 10 + 6)
-      "7" -> Ok(acc * 10 + 7)
-      "8" -> Ok(acc * 10 + 8)
-      "9" -> Ok(acc * 10 + 9)
-      _ -> Error(Nil)
-    }
-  })
 }
 
 pub fn list_pending(

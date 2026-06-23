@@ -56,7 +56,7 @@ pub type ListResult {
 }
 
 pub type GetWithMetadataResult {
-  GetWithMetadataResult(value: String, metadata: Option(Dynamic))
+  GetWithMetadataResult(value: Option(String), metadata: Option(Dynamic))
 }
 
 @external(javascript, "../gflare_ffi_kv.mjs", "kv_get")
@@ -113,7 +113,11 @@ pub fn get_with_metadata(
 }
 
 fn decode_get_with_metadata_result() {
-  use value <- decode.field("value", decode.string)
+  use value <- decode.optional_field(
+    "value",
+    None,
+    decode.optional(decode.string),
+  )
   use metadata <- decode.optional_field(
     "metadata",
     None,

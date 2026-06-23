@@ -148,8 +148,8 @@ pub fn list_result_with_keys_test() {
 // GetWithMetadataResult tests
 
 pub fn get_with_metadata_result_test() {
-  let result = kv.GetWithMetadataResult(value: "hello", metadata: None)
-  result.value |> should.equal("hello")
+  let result = kv.GetWithMetadataResult(value: Some("hello"), metadata: None)
+  result.value |> should.equal(Some("hello"))
   result.metadata |> should.equal(None)
 }
 

@@ -248,7 +248,7 @@ fn get_next_migration_version(dir: String) -> Int {
         |> list.filter_map(fn(f) {
           case string.split(f, "_") {
             [version_str, ..] ->
-              case parse_version(version_str) {
+              case int.parse(version_str) {
                 Ok(v) -> Ok(v)
                 Error(_) -> Error(Nil)
               }
@@ -263,25 +263,6 @@ fn get_next_migration_version(dir: String) -> Int {
     }
     Error(_) -> 1
   }
-}
-
-fn parse_version(s: String) -> Result(Int, Nil) {
-  let digits = string.to_graphemes(s)
-  list.try_fold(digits, 0, fn(acc, c) {
-    case c {
-      "0" -> Ok(acc * 10)
-      "1" -> Ok(acc * 10 + 1)
-      "2" -> Ok(acc * 10 + 2)
-      "3" -> Ok(acc * 10 + 3)
-      "4" -> Ok(acc * 10 + 4)
-      "5" -> Ok(acc * 10 + 5)
-      "6" -> Ok(acc * 10 + 6)
-      "7" -> Ok(acc * 10 + 7)
-      "8" -> Ok(acc * 10 + 8)
-      "9" -> Ok(acc * 10 + 9)
-      _ -> Error(Nil)
-    }
-  })
 }
 
 fn pad_number(n: Int, width: Int) -> String {

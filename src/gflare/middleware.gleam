@@ -1,10 +1,9 @@
-import gflare/bindings.{type Env}
 import gflare/log.{type Logger}
 import gflare/request.{type HttpRequest}
 import gflare/response.{type Response}
-import gflare/worker.{type Context}
+import gflare/router.{type Middleware}
 import gleam/int
-import gleam/javascript/promise.{type Promise}
+import gleam/javascript/promise
 import gleam/json
 import gleam/list
 import gleam/option.{type Option, None, Some}
@@ -31,44 +30,51 @@ pub fn default_config() -> MiddlewareConfig {
 pub fn with_logging(
   logger: Logger,
   config: MiddlewareConfig,
-  request: HttpRequest,
-  env: Env,
-  ctx: Context,
-  handler: fn(HttpRequest, Env, Context) -> Promise(Response),
-) -> Promise(Response) {
-  let request_id = log.generate_request_id()
-  let path = get_path(request.url(request))
+) -> Middleware {
+  router.Middleware(fn(req, env, ctx, next) {
+    let request_id = log.generate_request_id()
+    let path = get_path(request.url(req))
 
-  // Check if path should be excluded
-  case list.contains(config.exclude_paths, path) {
-    True -> handler(request, env, ctx)
-    False -> {
-      // Log request start
-      log_request_start(logger, request, request_id, config)
+    // Check if path should be excluded
+    case list.contains(config.exclude_paths, path) {
+      True -> {
+        let router.Handler(handler_fn) = next
+        handler_fn(req, env, ctx, router.RouteParams([]))
+      }
+      False -> {
+        // Log request start
+        log_request_start(logger, req, request_id, config)
 
-      // Get start time
-      let start_time = get_current_time()
+        // Get start time
+        let start_time = get_current_time()
 
-      // Execute handler
-      use response <- promise.await(handler(request, env, ctx))
+        // Execute handler
+        let router.Handler(handler_fn) = next
+        use response <- promise.await(handler_fn(
+          req,
+          env,
+          ctx,
+          router.RouteParams([]),
+        ))
 
-      // Calculate duration
-      let end_time = get_current_time()
-      let duration_ms = end_time -. start_time
+        // Calculate duration
+        let end_time = get_current_time()
+        let duration_ms = end_time -. start_time
 
-      // Log request end
-      log_request_end(
-        logger,
-        request,
-        response,
-        request_id,
-        duration_ms,
-        config,
-      )
+        // Log request end
+        log_request_end(
+          logger,
+          req,
+          response,
+          request_id,
+          duration_ms,
+          config,
+        )
 
-      promise.resolve(response)
+        promise.resolve(response)
+      }
     }
-  }
+  })
 }
 
 pub fn log_request_start(
@@ -91,7 +97,7 @@ pub fn log_request_start(
     True -> {
       let headers = request.headers(request)
       let headers_json =
-        list.map(headers, fn(h) { #("value", json.string(h.1)) })
+        list.map(headers, fn(h) { #(h.0, json.string(h.1)) })
         |> json.object
       list.append(mut_context, [#("headers", headers_json)])
     }

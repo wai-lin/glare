@@ -87,16 +87,6 @@ pub type ListResult {
   )
 }
 
-pub type R2ObjectResult {
-  R2ObjectResult(
-    key: String,
-    version: String,
-    size: Int,
-    etag: String,
-    uploaded: String,
-  )
-}
-
 @external(javascript, "../gflare_ffi_r2.mjs", "r2_get")
 fn do_get(bucket: Bucket, key: String) -> Promise(Result(ObjectBody, String))
 
@@ -114,7 +104,7 @@ fn do_get_meta(bucket: Bucket, key: String) -> Promise(Result(Dynamic, String))
 pub fn get_metadata(
   bucket: Bucket,
   key: String,
-) -> Promise(Result(R2ObjectResult, Error)) {
+) -> Promise(Result(ListObject, Error)) {
   use result <- promise.await(do_get_meta(bucket, key))
   case result {
     Ok(data) -> {
@@ -141,7 +131,7 @@ pub fn put(
   key: String,
   body: BitArray,
   options: PutOptions,
-) -> Promise(Result(R2ObjectResult, Error)) {
+) -> Promise(Result(ListObject, Error)) {
   let opts = encode_put_options(options)
   use result <- promise.await(do_put(bucket, key, body, opts))
   case result {
@@ -200,7 +190,7 @@ fn do_head(bucket: Bucket, key: String) -> Promise(Result(Dynamic, String))
 pub fn head(
   bucket: Bucket,
   key: String,
-) -> Promise(Result(R2ObjectResult, Error)) {
+) -> Promise(Result(ListObject, Error)) {
   use result <- promise.await(do_head(bucket, key))
   case result {
     Ok(data) -> {
@@ -308,7 +298,7 @@ fn decode_r2_object_result() {
   use size <- decode.field("size", decode.int)
   use etag <- decode.field("etag", decode.string)
   use uploaded <- decode.field("uploaded", decode.string)
-  decode.success(R2ObjectResult(key:, version:, size:, etag:, uploaded:))
+  decode.success(ListObject(key:, version:, size:, etag:, uploaded:))
 }
 
 fn decode_list_result() {

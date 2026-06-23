@@ -23,6 +23,7 @@ pub type TreeNode {
     param_child: Option(ParamNode),
     wildcard_child: Option(WildcardNode),
     handlers: Dict(String, Handler),
+    middleware: List(Middleware),
   )
 }
 
@@ -46,10 +47,6 @@ pub type Middleware {
   Middleware(fn(HttpRequest, Env, Context, Handler) -> Promise(Response))
 }
 
-pub type RouterConfig {
-  RouterConfig(strict_slashes: Bool, case_sensitive: Bool)
-}
-
 // Constructor
 
 /// Create a new empty router.
@@ -64,10 +61,6 @@ pub fn new() -> Router {
       |> promise.resolve
     }),
   )
-}
-
-pub fn new_with_config(_config: RouterConfig) -> Router {
-  new()
 }
 
 // Route builders
@@ -106,10 +99,12 @@ pub fn options(router: Router, path: String, handler: Handler) -> Router {
 pub fn any(router: Router, path: String, handler: Handler) -> Router {
   router
   |> add_route("GET", path, handler)
+  |> add_route("HEAD", path, handler)
   |> add_route("POST", path, handler)
   |> add_route("PUT", path, handler)
   |> add_route("DELETE", path, handler)
   |> add_route("PATCH", path, handler)
+  |> add_route("OPTIONS", path, handler)
 }
 
 // Middleware
@@ -172,10 +167,10 @@ pub fn serve(
   let segments = parse_path_segments(path)
 
   // Try to match route
-  case match_route(router.tree, segments, method) {
-    Ok(#(handler, params)) -> {
-      // Execute middleware chain with handler
-      let all_middleware = router.global_middleware
+  case match_route(router.tree, segments, method, []) {
+    Ok(#(handler, params, route_middleware)) -> {
+      // Execute middleware chain: global first, then route-specific
+      let all_middleware = list.append(router.global_middleware, route_middleware)
       execute_middleware_chain(
         all_middleware,
         request,
@@ -248,6 +243,7 @@ fn new_node() -> TreeNode {
     param_child: None,
     wildcard_child: None,
     handlers: dict.new(),
+    middleware: [],
   )
 }
 
@@ -285,8 +281,15 @@ fn insert_segments(
     [segment, ..rest] -> {
       case segment {
         "*" <> wildcard_name -> {
-          let wildcard = WildcardNode(wildcard_name, handler)
-          TreeNode(..node, wildcard_child: Some(wildcard))
+          // Wildcards must be the last segment
+          case rest {
+            [] -> {
+              let wildcard = WildcardNode(wildcard_name, handler)
+              TreeNode(..node, wildcard_child: Some(wildcard))
+            }
+            _ ->
+              panic as "Wildcard segment must be the last segment in the path"
+          }
         }
         ":" <> param_name -> {
           let child = case node.param_child {
@@ -317,11 +320,13 @@ fn match_route(
   node: TreeNode,
   segments: List(String),
   method: String,
-) -> Result(#(Handler, List(#(String, String))), MatchError) {
+  accumulated_middleware: List(Middleware),
+) -> Result(#(Handler, List(#(String, String)), List(Middleware)), MatchError) {
+  let all_middleware = list.append(accumulated_middleware, node.middleware)
   case segments {
     [] -> {
       case dict.get(node.handlers, method) {
-        Ok(handler) -> Ok(#(handler, []))
+        Ok(handler) -> Ok(#(handler, [], all_middleware))
         Error(_) -> {
           // Path exists but method not allowed
           case dict.size(node.handlers) > 0 {
@@ -334,23 +339,23 @@ fn match_route(
     [segment, ..rest] -> {
       // Try static match first (most specific)
       case dict.get(node.children, segment) {
-        Ok(child) -> match_route(child, rest, method)
+        Ok(child) -> match_route(child, rest, method, all_middleware)
         Error(_) -> {
           // Try param match
           case node.param_child {
             Some(param) -> {
-              case match_route(param.node, rest, method) {
-                Ok(#(handler, params)) ->
-                  Ok(#(handler, [#(param.name, segment), ..params]))
+              case match_route(param.node, rest, method, all_middleware) {
+                Ok(#(handler, params, mw)) ->
+                  Ok(#(handler, [#(param.name, segment), ..params], mw))
                 Error(RouteNotFound) -> {
                   // Try wildcard match
                   case node.wildcard_child {
-                    Some(wildcard) -> {
+                Some(wildcard) -> {
                       let remaining = join_segments(segments)
                       Ok(
                         #(wildcard.handler, [
                           #(wildcard.name, remaining),
-                        ]),
+                        ], all_middleware),
                       )
                     }
                     None -> Error(RouteNotFound)
@@ -367,7 +372,7 @@ fn match_route(
                   Ok(
                     #(wildcard.handler, [
                       #(wildcard.name, remaining),
-                    ]),
+                    ], all_middleware),
                   )
                 }
                 None -> Error(RouteNotFound)
@@ -394,7 +399,10 @@ fn find_allowed_methods(
             Some(param) -> find_allowed_methods(param.node, rest)
             None ->
               case node.wildcard_child {
-                Some(_) -> dict.keys(node.handlers)
+                Some(_wildcard) -> {
+                  // Wildcard handler exists, return its supported methods
+                  ["GET", "POST", "PUT", "DELETE", "PATCH"]
+                }
                 None -> []
               }
           }
@@ -439,17 +447,10 @@ fn execute_middleware(
   env: Env,
   ctx: Context,
   next: Handler,
-  error_handler: fn(HttpRequest, String) -> Response,
+  _error_handler: fn(HttpRequest, String) -> Response,
 ) -> Promise(Response) {
   let Middleware(handler_fn) = middleware
-  use result <- promise.await(promise.resolve(Ok(Nil)))
-  case result {
-    Ok(_) -> {
-      // Execute middleware
-      handler_fn(request, env, ctx, next)
-    }
-    Error(e) -> promise.resolve(error_handler(request, string.inspect(e)))
-  }
+  handler_fn(request, env, ctx, next)
 }
 
 fn safe_execute_handler(
@@ -458,14 +459,10 @@ fn safe_execute_handler(
   env: Env,
   ctx: Context,
   params: RouteParams,
-  error_handler: fn(HttpRequest, String) -> Response,
+  _error_handler: fn(HttpRequest, String) -> Response,
 ) -> Promise(Response) {
   let Handler(handler_fn) = handler
-  use result <- promise.await(promise.resolve(Ok(Nil)))
-  case result {
-    Ok(_) -> handler_fn(request, env, ctx, params)
-    Error(e) -> promise.resolve(error_handler(request, string.inspect(e)))
-  }
+  handler_fn(request, env, ctx, params)
 }
 
 fn execute_handler(
@@ -538,30 +535,32 @@ fn insert_tree_with_prefix(
   existing: TreeNode,
   prefix: String,
   new_tree: TreeNode,
-  _middleware: List(Middleware),
+  middleware: List(Middleware),
 ) -> TreeNode {
   let prefix_segments = parse_path_segments(prefix)
-  insert_tree_at_prefix(existing, prefix_segments, new_tree)
+  insert_tree_at_prefix(existing, prefix_segments, new_tree, middleware)
 }
 
 fn insert_tree_at_prefix(
   node: TreeNode,
   segments: List(String),
   new_tree: TreeNode,
+  middleware: List(Middleware),
 ) -> TreeNode {
   case segments {
     [] -> {
       // Merge handlers
       let handlers = dict.merge(node.handlers, new_tree.handlers)
       let children = dict.merge(node.children, new_tree.children)
-      TreeNode(..node, handlers:, children:)
+      let all_middleware = list.append(middleware, node.middleware)
+      TreeNode(..node, handlers:, children:, middleware: all_middleware)
     }
     [segment, ..rest] -> {
       let child = case dict.get(node.children, segment) {
         Ok(existing) -> existing
         Error(_) -> new_node()
       }
-      let updated_child = insert_tree_at_prefix(child, rest, new_tree)
+      let updated_child = insert_tree_at_prefix(child, rest, new_tree, middleware)
       let children = dict.insert(node.children, segment, updated_child)
       TreeNode(..node, children:)
     }

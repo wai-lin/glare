@@ -145,8 +145,7 @@ pub fn generate_turso_select_with_returns_test() {
   should_contain(content, "pub fn find_item(")
   should_contain(content, "turso.Config config")
   should_contain(content, "turso.int(item_id)")
-  should_contain(content, "decode.int")
-  should_contain(content, "decode.float")
+  should_contain(content, "extract_turso_value")
 }
 
 pub fn generate_turso_insert_no_returns_test() {
@@ -330,11 +329,13 @@ pub fn generate_turso_imports_test() {
   ]
   let content =
     generate_and_read(queries, Turso, "/tmp/test_turso_imports.gleam")
-  should_contain(content, "import gleam/dynamic/decode")
   should_contain(content, "import gleam/javascript/promise")
+  should_contain(content, "import gleam/list")
   should_contain(content, "import gleam/option.{type Option, None, Some}")
+  should_contain(content, "import gleam/result")
   should_contain(content, "import gflare/turso")
   should_contain(content, "import gflare/turso/error.{type TursoError}")
+  should_contain(content, "import gflare/turso/types.{type Value}")
 }
 
 // Decoder generation tests

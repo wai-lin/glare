@@ -171,7 +171,7 @@ pub fn list_object_construction_test() {
 
 pub fn r2_object_result_construction_test() {
   let result =
-    r2.R2ObjectResult(
+    r2.ListObject(
       key: "test.txt",
       version: "v1",
       size: 512,
@@ -184,7 +184,7 @@ pub fn r2_object_result_construction_test() {
 
 pub fn r2_object_result_equality_test() {
   let r1 =
-    r2.R2ObjectResult(
+    r2.ListObject(
       key: "a.txt",
       version: "v1",
       size: 100,
@@ -192,7 +192,7 @@ pub fn r2_object_result_equality_test() {
       uploaded: "2024-01-01",
     )
   let r2_obj =
-    r2.R2ObjectResult(
+    r2.ListObject(
       key: "a.txt",
       version: "v1",
       size: 100,

@@ -27,10 +27,6 @@ pub type D1Meta {
 pub type Row =
   Dynamic
 
-pub type D1ExecResult {
-  D1ExecResult(results: List(Dynamic), success: Bool, meta: D1Meta)
-}
-
 pub fn int(value: Int) -> Dynamic {
   do_int(value)
 }
@@ -140,14 +136,14 @@ fn do_exec(db: Database, query: String) -> Promise(Result(Dynamic, String))
 pub fn exec(
   db: Database,
   query: String,
-) -> Promise(Result(D1ExecResult, Error)) {
+) -> Promise(Result(D1Result, Error)) {
   use result <- promise.await(do_exec(db, query))
   case result {
     Ok(data) -> {
-      case decode.run(data, decode_d1_exec_result()) {
+      case decode.run(data, decode_d1_result()) {
         Ok(r) -> promise.resolve(Ok(r))
         Error(_) ->
-          promise.resolve(Error(D1Error("Failed to decode D1 exec result")))
+          promise.resolve(Error(D1Error("Failed to decode D1 result")))
       }
     }
     Error(msg) -> promise.resolve(Error(D1Error(msg)))
@@ -159,13 +155,6 @@ fn decode_d1_result() {
   use success <- decode.field("success", decode.bool)
   use meta <- decode.field("meta", decode_d1_meta())
   decode.success(D1Result(results:, success:, meta:))
-}
-
-fn decode_d1_exec_result() {
-  use results <- decode.field("results", decode.list(decode.dynamic))
-  use success <- decode.field("success", decode.bool)
-  use meta <- decode.field("meta", decode_d1_meta())
-  decode.success(D1ExecResult(results:, success:, meta:))
 }
 
 fn decode_d1_meta() {

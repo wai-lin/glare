@@ -167,11 +167,18 @@ fn generate_d1_module(
   use_shared_types: Bool,
   package_name: String,
 ) -> String {
+  let queries_with_returns = list.filter(queries, fn(q) { q.returns != [] })
   let shared_import = case use_shared_types {
     True -> {
       let module_path =
         string.replace(package_name, "-", "_") <> ".gen.sql_shared"
-      "\nimport " <> module_path <> ".{type FindUserRow, type CreateUserRow}"
+      let type_names =
+        list.map(queries_with_returns, fn(q) { snake_to_pascal(q.name) <> "Row" })
+        |> string.join(", ")
+      case type_names {
+        "" -> ""
+        _ -> "\nimport " <> module_path <> ".{type " <> type_names <> "}"
+      }
     }
     False -> ""
   }
@@ -208,7 +215,7 @@ fn generate_turso_module(
   }
 
   let imports =
-    "import gleam/dynamic/decode\nimport gleam/javascript/promise\nimport gleam/option.{type Option, None, Some}\nimport gflare/turso\nimport gflare/turso/error.{type TursoError}"
+    "import gleam/javascript/promise\nimport gleam/list\nimport gleam/option.{type Option, None, Some}\nimport gleam/result\nimport gflare/turso\nimport gflare/turso/error.{type TursoError}\nimport gflare/turso/types.{type Value}"
     <> shared_import
 
   let types = case use_shared_types {
@@ -219,9 +226,11 @@ fn generate_turso_module(
   let functions =
     list.map(queries, generate_turso_function) |> string.join("\n\n")
 
+  let helper = "\n\nfn extract_turso_value(values: List(Value), index: Int, extractor: fn(Value) -> a) -> Result(a, TursoError) {\n  case list.at(values, index) {\n    Ok(value) -> Ok(extractor(value))\n    Error(_) -> Error(error.DecodeError(\"Missing value at index \" <> int.to_string(index)))\n  }\n}"
+
   case types {
-    "" -> [imports, "", functions] |> string.join("\n")
-    _ -> [imports, "", types, "", functions] |> string.join("\n")
+    "" -> [imports, "", functions, helper] |> string.join("\n")
+    _ -> [imports, "", types, "", functions, helper] |> string.join("\n")
   }
 }
 
@@ -332,25 +341,33 @@ fn generate_turso_function(query: ParsedQuery) -> String {
     })
     |> string.join(",\n")
 
-  let decoder_lines = generate_decoder_lines(query.returns, 0)
   let return_type = case query.returns {
     [] -> "turso.ExecuteResult"
     _ -> snake_to_pascal(query.name) <> "Row"
   }
 
-  let decoder_block = case query.returns {
+  let extract_block = case query.returns {
     [] -> ""
     _ -> {
-      let decoder_fields =
-        list.map(query.returns, fn(f) { "    " <> f.name })
+      let extract_lines =
+        list.index_map(query.returns, fn(f, index) {
+          "    "
+          <> f.name
+          <> " <- extract_turso_value(row.values, "
+          <> int.to_string(index)
+          <> ", "
+          <> types.gleam_type_to_turso_extractor(f.gleam_type)
+          <> ")"
+        })
         |> string.join("\n")
-      "  let decoder = {\n"
-      <> decoder_lines
-      <> "\n    decode.success("
+      "  use row <- result.try(execute_result.rows |> list.first |> result.replace_error(error.DecodeError(\"No row found\")))\n"
+      <> extract_lines
+      <> "\n  promise.resolve(Ok("
       <> return_type
       <> "("
-      <> decoder_fields
-      <> ":))\n  }\n"
+      <> list.map(query.returns, fn(f) { f.name })
+      |> string.join(", ")
+      <> ":)))"
     }
   }
 
@@ -366,7 +383,9 @@ fn generate_turso_function(query: ParsedQuery) -> String {
       <> escape_sql(query.sql)
       <> "\", [\n"
       <> turso_args
-      <> ",\n  ]))\n  case result {\n    Ok(execute_result) -> {\n      case execute_result.rows {\n        [row, ..] -> {\n          case decode.run(row.values, decoder) {\n            Ok(decoded) -> promise.resolve(Ok(decoded))\n            Error(_) -> promise.resolve(Error(error.DecodeError(\"Failed to decode row\")))\n          }\n        }\n        [] -> promise.resolve(Error(error.NotFound(\"No row found\")))\n      }\n    }\n    Error(e) -> promise.resolve(Error(e))\n  }"
+      <> ",\n  ]))\n  case result {\n    Ok(execute_result) -> {\n"
+      <> extract_block
+      <> "\n    }\n    Error(e) -> promise.resolve(Error(e))\n  }"
   }
 
   let return_sig = case query.returns {
@@ -381,7 +400,6 @@ fn generate_turso_function(query: ParsedQuery) -> String {
   <> ") -> "
   <> return_sig
   <> " {\n"
-  <> decoder_block
   <> execute_call
   <> "\n}"
 }

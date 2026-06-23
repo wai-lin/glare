@@ -5,9 +5,6 @@ import gleam/result
 import gleam/string
 import simplifile
 
-@external(javascript, "../ffi.mjs", "generate_uuid")
-fn generate_uuid() -> String
-
 pub fn entrypoint(
   output_path: String,
   package_name: String,
@@ -42,22 +39,24 @@ fn build_entrypoint_js(
       case h {
         "queue" ->
           Ok(
-            "  async queue(batch, env, ctx) {
-    const messages = batch.messages.map(msg => ({
-      id: msg.id,
-      timestamp: msg.timestamp,
-      body: msg.body,
-      attempts: msg.attempts,
-      ack: () => msg.ack(),
-      retry: () => msg.retry(),
-    }));
-    return handler.queue({ messages }, env, ctx);
-  },",
+            "export async function queue(batch, env, ctx) {\n"
+            <> "  const messages = batch.messages.map(msg => ({\n"
+            <> "    id: msg.id,\n"
+            <> "    timestamp: msg.timestamp,\n"
+            <> "    body: msg.body,\n"
+            <> "    attempts: msg.attempts,\n"
+            <> "    ack: () => msg.ack(),\n"
+            <> "    retry: () => msg.retry(),\n"
+            <> "  }));\n"
+            <> "  return handler.queue({ messages }, env, ctx);\n"
+            <> "}",
           )
         "alarm" -> Error(Nil)
-        _ -> Ok("  async " <> h <> "(...args) {
-    return handler." <> h <> "(...args);
-  },")
+        _ -> Ok(
+          "export async function " <> h <> "(...args) {\n"
+          <> "  return handler." <> h <> "(...args);\n"
+          <> "}",
+        )
       }
     })
 
@@ -65,18 +64,17 @@ fn build_entrypoint_js(
 
   let exports_block = case handler_exports {
     [] -> ""
-    _ -> string.join(handler_exports, "\n")
+    _ -> string.join(handler_exports, "\n\n")
   }
 
   let do_export_block = case do_export_names {
     [] -> ""
-    names -> "export { " <> string.join(names, ", ") <> " };"
+    names -> "\nexport { " <> string.join(names, ", ") <> " };"
   }
 
   string.join(imports, "\n")
-  <> "\n\nconst exports = {};\n\n"
+  <> "\n\n"
   <> exports_block
-  <> "\n\nexport default exports;\n\n"
   <> do_export_block
   <> "\n"
 }
@@ -113,7 +111,7 @@ fn build_wrangler_toml(
       [
         "[[kv_namespaces]]",
         "binding = \"" <> name <> "\"",
-        "id = \"" <> generate_uuid() <> "\"",
+        "id = \"YOUR_KV_NAMESPACE_ID\"",
         "",
       ]
     })
@@ -128,7 +126,7 @@ fn build_wrangler_toml(
           <> "-"
           <> string.lowercase(name)
           <> "\"",
-        "database_id = \"" <> generate_uuid() <> "\"",
+        "database_id = \"YOUR_D1_DATABASE_ID\"",
         "",
       ]
     })
