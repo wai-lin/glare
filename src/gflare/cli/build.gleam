@@ -129,6 +129,7 @@ fn run_esbuild(input: String, output: String) -> Result(Nil, String) {
         "--bundle",
         "--format=esm",
         "--platform=neutral",
+        "--external:node:*",
         "--outfile=" <> output,
         "--conditions=import",
       ],
