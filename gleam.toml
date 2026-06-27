@@ -1,5 +1,5 @@
 name = "gflare"
-version = "1.2.1"
+version = "1.2.2"
 target = "javascript"
 description = "Zero-glue Gleam framework for Cloudflare Workers"
 licences = ["MIT"]
