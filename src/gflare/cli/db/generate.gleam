@@ -312,27 +312,32 @@ fn generate_d1_function(query: ParsedQuery) -> String {
     }
   }
 
+  let bind_section = case query.params {
+    [] -> ""
+    _ -> "\n  |> d1.bind([\n" <> bind_values <> "\n  ])"
+  }
+
   let run_call = case query.returns {
     [] ->
       "  d1.prepare(db, \""
       <> escape_sql(query.sql)
-      <> "\")\n  |> d1.bind([\n"
-      <> bind_values
-      <> ",\n  ])\n  |> d1.run()"
+      <> "\")"
+      <> bind_section
+      <> "\n  |> d1.run()"
     _ ->
       case query.returns_many {
         True ->
           "  use result <- promise.await(d1.prepare(db, \""
           <> escape_sql(query.sql)
-          <> "\")\n  |> d1.bind([\n"
-          <> bind_values
-          <> ",\n  ])\n  |> d1.all())\n  case result {\n    Ok(d1_result) -> {\n      let decoded = list.filter_map(d1_result.results, fn(row) {\n        case decode.run(row, decoder) {\n          Ok(row) -> Ok(row)\n          Error(_) -> Error(Nil)\n        }\n      })\n      promise.resolve(Ok(decoded))\n    }\n    Error(e) -> promise.resolve(Error(e))\n  }"
+          <> "\")"
+          <> bind_section
+          <> "\n  |> d1.all())\n  case result {\n    Ok(d1_result) -> {\n      let decoded = list.filter_map(d1_result.results, fn(row) {\n        case decode.run(row, decoder) {\n          Ok(row) -> Ok(row)\n          Error(_) -> Error(Nil)\n        }\n      })\n      promise.resolve(Ok(decoded))\n    }\n    Error(e) -> promise.resolve(Error(e))\n  }"
         False ->
           "  use result <- promise.await(d1.prepare(db, \""
           <> escape_sql(query.sql)
-          <> "\")\n  |> d1.bind([\n"
-          <> bind_values
-          <> ",\n  ])\n  |> d1.first())\n  case result {\n    Ok(Some(row)) -> {\n      case decode.run(row, decoder) {\n        Ok(decoded) -> promise.resolve(Ok(decoded))\n        Error(_) -> promise.resolve(Error(error.D1Error(\"Failed to decode row\")))\n      }\n    }\n    Ok(None) -> promise.resolve(Error(error.D1Error(\"No row found\")))\n    Error(e) -> promise.resolve(Error(e))\n  }"
+          <> "\")"
+          <> bind_section
+          <> "\n  |> d1.first())\n  case result {\n    Ok(Some(row)) -> {\n      case decode.run(row, decoder) {\n        Ok(decoded) -> promise.resolve(Ok(decoded))\n        Error(_) -> promise.resolve(Error(error.D1Error(\"Failed to decode row\")))\n      }\n    }\n    Ok(None) -> promise.resolve(Error(error.D1Error(\"No row found\")))\n    Error(e) -> promise.resolve(Error(e))\n  }"
       }
   }
 
@@ -419,19 +424,24 @@ fn generate_turso_function(query: ParsedQuery) -> String {
     }
   }
 
+  let args_section = case query.params {
+    [] -> ""
+    _ -> ", [\n" <> turso_args <> "\n  ]"
+  }
+
   let execute_call = case query.returns {
     [] ->
       "  turso.execute(config, \""
       <> escape_sql(query.sql)
-      <> "\", [\n"
-      <> turso_args
-      <> ",\n  ])"
+      <> "\""
+      <> args_section
+      <> ")"
     _ ->
       "  use result <- promise.await(turso.execute(config, \""
       <> escape_sql(query.sql)
-      <> "\", [\n"
-      <> turso_args
-      <> ",\n  ]))\n  case result {\n    Ok(execute_result) -> {\n"
+      <> "\""
+      <> args_section
+      <> "))\n  case result {\n    Ok(execute_result) -> {\n"
       <> extract_block
       <> "\n    }\n    Error(e) -> promise.resolve(Error(e))\n  }"
   }

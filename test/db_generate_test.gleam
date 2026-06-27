@@ -669,3 +669,95 @@ pub fn d1_returns_many_decoder_block_test() {
   should_contain(content, "d1.all()")
   should_contain(content, "list.filter_map(d1_result.results")
 }
+
+// No-params query tests (stray comma bug)
+
+pub fn d1_no_params_select_test() {
+  let queries = [
+    ParsedQuery(
+      name: "count_users",
+      params: [],
+      returns: [ResultSet(name: "count", gleam_type: GInt)],
+      sql: "SELECT COUNT(*) as count FROM users",
+      backends: [D1],
+      returns_many: False,
+    ),
+  ]
+  let content = generate_and_read(queries, D1, "/tmp/test_no_params.gleam")
+  should_contain(content, "d1.first()")
+  should_not_contain(content, "d1.bind([")
+  should_not_contain(content, ",)")
+}
+
+pub fn d1_no_params_returns_many_test() {
+  let queries = [
+    ParsedQuery(
+      name: "list_all",
+      params: [],
+      returns: [
+        ResultSet(name: "id", gleam_type: GInt),
+        ResultSet(name: "name", gleam_type: GString),
+      ],
+      sql: "SELECT id, name FROM users",
+      backends: [D1],
+      returns_many: True,
+    ),
+  ]
+  let content = generate_and_read(queries, D1, "/tmp/test_no_params_many.gleam")
+  should_contain(content, "d1.all()")
+  should_not_contain(content, "d1.bind([")
+}
+
+pub fn d1_no_params_insert_test() {
+  let queries = [
+    ParsedQuery(
+      name: "reset_counter",
+      params: [],
+      returns: [],
+      sql: "UPDATE counters SET value = 0",
+      backends: [D1],
+      returns_many: False,
+    ),
+  ]
+  let content =
+    generate_and_read(queries, D1, "/tmp/test_no_params_insert.gleam")
+  should_contain(content, "d1.run()")
+  should_not_contain(content, "d1.bind([")
+}
+
+pub fn turso_no_params_select_test() {
+  let queries = [
+    ParsedQuery(
+      name: "count_items",
+      params: [],
+      returns: [ResultSet(name: "count", gleam_type: GInt)],
+      sql: "SELECT COUNT(*) as count FROM items",
+      backends: [Turso],
+      returns_many: False,
+    ),
+  ]
+  let content =
+    generate_and_read(queries, Turso, "/tmp/test_turso_no_params.gleam")
+  should_contain(content, "turso.execute(config,")
+  should_not_contain(content, ", [")
+}
+
+pub fn turso_no_params_returns_many_test() {
+  let queries = [
+    ParsedQuery(
+      name: "list_all_items",
+      params: [],
+      returns: [
+        ResultSet(name: "id", gleam_type: GInt),
+        ResultSet(name: "name", gleam_type: GString),
+      ],
+      sql: "SELECT id, name FROM items",
+      backends: [Turso],
+      returns_many: True,
+    ),
+  ]
+  let content =
+    generate_and_read(queries, Turso, "/tmp/test_turso_no_params_many.gleam")
+  should_contain(content, "turso.execute(config,")
+  should_not_contain(content, ", [")
+}
