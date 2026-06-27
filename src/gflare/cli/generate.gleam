@@ -24,11 +24,17 @@ fn build_entrypoint_js(
   do_classes: List(DoClass),
 ) -> String {
   let imports = [
-    "import * as handler from \"./" <> package_name <> ".mjs\";",
+    "import * as handler from \"../dev/javascript/"
+    <> package_name
+    <> "/"
+    <> package_name
+    <> ".mjs\";",
     ..list.map(do_classes, fn(cls) {
       "import { "
       <> cls.name
-      <> " } from \"./"
+      <> " } from \"../dev/javascript/"
+      <> package_name
+      <> "/"
       <> cls.module
       <> "_wrapped.mjs\";"
     })
