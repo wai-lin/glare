@@ -56,9 +56,7 @@ pub fn new() -> Router {
     global_middleware: [],
     error_handler: default_error_handler,
     not_found_handler: Handler(fn(_req, _env, _ctx, _params) {
-      use _ <- promise.await(promise.resolve(Nil))
-      response.not_found()
-      |> promise.resolve
+      response.not_found() |> promise.resolve
     }),
   )
 }
@@ -517,10 +515,20 @@ fn join_segments(segments: List(String)) -> String {
 }
 
 fn get_path(url: String) -> String {
-  case string.split(url, "?") {
-    [path, _] -> path
-    [path] -> path
+  // Strip protocol and host if present (e.g., http://localhost:8787/hello -> /hello)
+  let without_protocol = case string.split(url, "://") {
+    [_, rest] -> rest
     _ -> url
+  }
+  let path = case string.split(without_protocol, "/") {
+    [_, ..rest] -> "/" <> string.join(rest, "/")
+    _ -> without_protocol
+  }
+  // Strip query string
+  case string.split(path, "?") {
+    [p, _] -> p
+    [p] -> p
+    _ -> path
   }
 }
 
