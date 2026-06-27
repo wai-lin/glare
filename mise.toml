@@ -1,0 +1,21 @@
+[settings]
+jobs = 2
+
+[tasks.format]
+description = "Gleam format"
+run = "gleam format"
+
+[tasks.check]
+description = "Gleam check"
+depends = ["format"]
+run = "gleam check"
+
+[tasks.test]
+description = "Gleam test"
+depends = ["check"]
+run = "gleam test"
+
+[tasks.build]
+description = "Gleam build"
+depends = ["test"]
+run = "gleam build"
