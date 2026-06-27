@@ -207,11 +207,20 @@ fn generate_turso_module(
   use_shared_types: Bool,
   package_name: String,
 ) -> String {
+  let queries_with_returns = list.filter(queries, fn(q) { q.returns != [] })
   let shared_import = case use_shared_types {
     True -> {
       let module_path =
         string.replace(package_name, "-", "_") <> ".gen.sql_shared"
-      "\nimport " <> module_path <> ".{type FindUserRow, type CreateUserRow}"
+      let type_names =
+        list.map(queries_with_returns, fn(q) {
+          snake_to_pascal(q.name) <> "Row"
+        })
+        |> string.join(", ")
+      case type_names {
+        "" -> ""
+        _ -> "\nimport " <> module_path <> ".{type " <> type_names <> "}"
+      }
     }
     False -> ""
   }
@@ -290,15 +299,16 @@ fn generate_d1_function(query: ParsedQuery) -> String {
     [] -> ""
     _ -> {
       let decoder_fields =
-        list.map(query.returns, fn(f) { "    " <> f.name })
-        |> string.join("\n")
+        list.map(query.returns, fn(f) { f.name <> ":" })
+        |> string.join(", ")
+      let decoder_type = snake_to_pascal(query.name) <> "Row"
       "  let decoder = {\n"
       <> decoder_lines
       <> "\n    decode.success("
-      <> return_type
+      <> decoder_type
       <> "("
       <> decoder_fields
-      <> ":))\n  }\n"
+      <> "))\n  }\n"
     }
   }
 
@@ -384,16 +394,16 @@ fn generate_turso_function(query: ParsedQuery) -> String {
           <> ")"
         })
         |> string.join("\n")
+      let row_type = snake_to_pascal(query.name) <> "Row"
       let row_expr =
-        return_type
+        row_type
         <> "("
-        <> list.map(query.returns, fn(f) { f.name })
+        <> list.map(query.returns, fn(f) { f.name <> ":" })
         |> string.join(", ")
-        <> ":)"
+        <> ")"
       case query.returns_many {
         True ->
           "  let decoded = list.filter_map(execute_result.rows, fn(row) {\n"
-          <> "    use result <- result.try(execute_result.rows |> list.first |> result.replace_error(error.DecodeError(\"No row found\")))\n"
           <> extract_lines
           <> "\n    Ok("
           <> row_expr

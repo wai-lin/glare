@@ -569,3 +569,103 @@ pub fn generate_no_returns_many_without_annotation_test() {
   should_contain(content, "d1.first()")
   should_not_contain(content, "List(CountUsersRow)")
 }
+
+// Syntax correctness tests
+
+pub fn d1_decoder_block_uses_colon_shorthand_test() {
+  let queries = [
+    ParsedQuery(
+      name: "find_user",
+      params: [QueryParam(name: "user_id", gleam_type: GInt)],
+      returns: [
+        ResultSet(name: "id", gleam_type: GInt),
+        ResultSet(name: "name", gleam_type: GString),
+        ResultSet(name: "email", gleam_type: GString),
+      ],
+      sql: "SELECT id, name, email FROM users WHERE id = ?1",
+      backends: [D1],
+      returns_many: False,
+    ),
+  ]
+  let content = generate_and_read(queries, D1, "/tmp/test_syntax.gleam")
+  should_contain(content, "decode.success(FindUserRow(id:, name:, email:))")
+  should_not_contain(content, "FindUserRow(    id")
+}
+
+pub fn d1_decoder_no_stray_colon_before_close_test() {
+  let queries = [
+    ParsedQuery(
+      name: "get_count",
+      params: [],
+      returns: [ResultSet(name: "count", gleam_type: GInt)],
+      sql: "SELECT COUNT(*) as count FROM users",
+      backends: [D1],
+      returns_many: False,
+    ),
+  ]
+  let content = generate_and_read(queries, D1, "/tmp/test_single_field.gleam")
+  should_contain(content, "decode.success(GetCountRow(count:))")
+  should_not_contain(content, "count: )")
+}
+
+pub fn turso_single_row_uses_colon_shorthand_test() {
+  let queries = [
+    ParsedQuery(
+      name: "find_item",
+      params: [QueryParam(name: "item_id", gleam_type: GInt)],
+      returns: [
+        ResultSet(name: "id", gleam_type: GInt),
+        ResultSet(name: "name", gleam_type: GString),
+      ],
+      sql: "SELECT id, name FROM items WHERE id = ?1",
+      backends: [Turso],
+      returns_many: False,
+    ),
+  ]
+  let content =
+    generate_and_read(queries, Turso, "/tmp/test_turso_syntax.gleam")
+  should_contain(content, "Ok(FindItemRow(id:, name:))")
+  should_not_contain(content, "FindItemRow(id, name)")
+  should_not_contain(content, "FindItemRow(id, name:)")
+}
+
+pub fn turso_returns_many_uses_colon_shorthand_test() {
+  let queries = [
+    ParsedQuery(
+      name: "list_items",
+      params: [],
+      returns: [
+        ResultSet(name: "id", gleam_type: GInt),
+        ResultSet(name: "name", gleam_type: GString),
+      ],
+      sql: "SELECT id, name FROM items",
+      backends: [Turso],
+      returns_many: True,
+    ),
+  ]
+  let content =
+    generate_and_read(queries, Turso, "/tmp/test_turso_many_syntax.gleam")
+  should_contain(content, "Ok(ListItemsRow(id:, name:))")
+  should_not_contain(content, "ListItemsRow(id, name)")
+  should_not_contain(content, "list.first")
+}
+
+pub fn d1_returns_many_decoder_block_test() {
+  let queries = [
+    ParsedQuery(
+      name: "list_users",
+      params: [],
+      returns: [
+        ResultSet(name: "id", gleam_type: GInt),
+        ResultSet(name: "name", gleam_type: GString),
+      ],
+      sql: "SELECT id, name FROM users",
+      backends: [D1],
+      returns_many: True,
+    ),
+  ]
+  let content = generate_and_read(queries, D1, "/tmp/test_d1_many_syntax.gleam")
+  should_contain(content, "decode.success(ListUsersRow(id:, name:))")
+  should_contain(content, "d1.all()")
+  should_contain(content, "list.filter_map(d1_result.results")
+}
