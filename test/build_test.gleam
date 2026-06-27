@@ -91,45 +91,46 @@ pub fn detect_handlers_no_false_positive_from_object_keys_test() {
   |> should.equal([])
 }
 
-pub fn parse_realistic_gleam_toml_test() {
+pub fn parse_realistic_wrangler_toml_test() {
   let toml =
-    "name = \"my_worker\"\n"
-    <> "version = \"1.0.0\"\n"
-    <> "target = \"javascript\"\n"
-    <> "\n"
-    <> "[dependencies]\n"
-    <> "gleam_stdlib = \">= 1.0.0 and < 2.0.0\"\n"
-    <> "gflare = \">= 0.1.0 and < 1.0.0\"\n"
-    <> "\n"
-    <> "[cloudflare]\n"
-    <> "name = \"my-worker\"\n"
+    "name = \"my-worker\"\n"
     <> "compatibility_date = \"2025-01-01\"\n"
     <> "\n"
-    <> "[cloudflare.bindings]\n"
-    <> "kv = [\"CACHE\", \"SESSIONS\"]\n"
-    <> "r2 = [\"ASSETS\"]\n"
-    <> "queues_producers = [\"EVENTS\"]\n"
-    <> "queues_consumers = [\"events\"]\n"
+    <> "[[kv_namespaces]]\n"
+    <> "binding = \"CACHE\"\n"
     <> "\n"
-    <> "[[cloudflare.d1]]\n"
+    <> "[[kv_namespaces]]\n"
+    <> "binding = \"SESSIONS\"\n"
+    <> "\n"
+    <> "[[r2_buckets]]\n"
+    <> "binding = \"ASSETS\"\n"
+    <> "\n"
+    <> "[queues]\n"
+    <> "\n"
+    <> "[[queues.producers]]\n"
+    <> "binding = \"EVENTS\"\n"
+    <> "\n"
+    <> "[[queues.consumers]]\n"
+    <> "queue = \"events\"\n"
+    <> "\n"
+    <> "[[d1_databases]]\n"
     <> "binding = \"DB\"\n"
     <> "database_name = \"my-db\"\n"
     <> "database_id = \"abc-123\"\n"
     <> "migrations_dir = \"./db/migrations\"\n"
     <> "\n"
-    <> "[cloudflare.vars]\n"
+    <> "[vars]\n"
     <> "ENVIRONMENT = \"production\"\n"
 
-  case toml_utils.parse_config(toml) {
+  case toml_utils.parse_wrangler(toml) {
     Ok(config) -> {
-      config.package_name |> should.equal("my_worker")
-      config.cloudflare.name |> should.equal("my-worker")
-      config.cloudflare.compatibility_date |> should.equal("2025-01-01")
-      config.cloudflare.bindings.kv |> should.equal(["CACHE", "SESSIONS"])
-      config.cloudflare.bindings.d1
+      config.worker_name |> should.equal("my-worker")
+      config.compatibility_date |> should.equal("2025-01-01")
+      config.bindings.kv |> should.equal(["CACHE", "SESSIONS"])
+      config.bindings.d1
       |> list.length
       |> should.equal(1)
-      case config.cloudflare.bindings.d1 {
+      case config.bindings.d1 {
         [d1] -> {
           d1.binding |> should.equal("DB")
           d1.database_name |> should.equal(Some("my-db"))
@@ -138,10 +139,10 @@ pub fn parse_realistic_gleam_toml_test() {
         }
         _ -> should.fail()
       }
-      config.cloudflare.bindings.r2 |> should.equal(["ASSETS"])
-      config.cloudflare.bindings.queues_producers
+      config.bindings.r2 |> should.equal(["ASSETS"])
+      config.bindings.queues_producers
       |> should.equal(["EVENTS"])
-      config.cloudflare.bindings.queues_consumers
+      config.bindings.queues_consumers
       |> should.equal(["events"])
     }
     Error(_) -> should.fail()
@@ -150,29 +151,28 @@ pub fn parse_realistic_gleam_toml_test() {
 
 pub fn parse_toml_with_durable_objects_test() {
   let toml =
-    "name = \"my_worker\"\n"
+    "name = \"my-worker\"\n"
     <> "\n"
-    <> "[cloudflare]\n"
-    <> "name = \"my-worker\"\n"
+    <> "[durable_objects]\n"
     <> "\n"
-    <> "[[cloudflare.durable_objects.classes]]\n"
+    <> "[[durable_objects.bindings]]\n"
     <> "name = \"Counter\"\n"
-    <> "module = \"my_worker/durable_objects/counter\"\n"
+    <> "class_name = \"CounterDO\"\n"
     <> "\n"
-    <> "[[cloudflare.durable_objects.classes]]\n"
+    <> "[[durable_objects.bindings]]\n"
     <> "name = \"ChatRoom\"\n"
-    <> "module = \"my_worker/durable_objects/chat_room\"\n"
+    <> "class_name = \"ChatRoomDO\"\n"
 
-  case toml_utils.parse_config(toml) {
+  case toml_utils.parse_wrangler(toml) {
     Ok(config) -> {
-      config.cloudflare.durable_objects.classes
+      config.durable_objects.classes
       |> list.length
       |> should.equal(2)
-      let classes = config.cloudflare.durable_objects.classes
+      let classes = config.durable_objects.classes
       case classes {
         [first, ..] -> {
           first.name |> should.equal("Counter")
-          first.module |> should.equal("my_worker/durable_objects/counter")
+          first.class_name |> should.equal("CounterDO")
         }
         [] -> should.fail()
       }
@@ -249,34 +249,29 @@ pub fn full_pipeline_test() {
   let dir = test_dir_name(3)
   let _ = simplifile.create_directory_all(dir <> "/src")
 
-  let gleam_toml =
-    "name = \"pipeline_test\"\n"
-    <> "version = \"1.0.0\"\n"
-    <> "target = \"javascript\"\n"
-    <> "\n"
-    <> "[cloudflare]\n"
-    <> "name = \"pipeline-test\"\n"
+  let wrangler_toml =
+    "name = \"pipeline-test\"\n"
     <> "compatibility_date = \"2025-01-01\"\n"
     <> "\n"
-    <> "[cloudflare.bindings]\n"
-    <> "kv = [\"CACHE\"]\n"
+    <> "[[kv_namespaces]]\n"
+    <> "binding = \"CACHE\"\n"
     <> "\n"
-    <> "[[cloudflare.d1]]\n"
+    <> "[[d1_databases]]\n"
     <> "binding = \"DB\"\n"
     <> "database_name = \"pipeline-db\"\n"
   let assert Ok(_) =
-    simplifile.write(to: dir <> "/gleam.toml", contents: gleam_toml)
+    simplifile.write(to: dir <> "/wrangler.toml", contents: wrangler_toml)
 
-  let assert Ok(content) = simplifile.read(dir <> "/gleam.toml")
-  let assert Ok(config) = toml_utils.parse_config(content)
+  let assert Ok(content) = simplifile.read(dir <> "/wrangler.toml")
+  let assert Ok(config) = toml_utils.parse_wrangler(content)
 
-  config.package_name |> should.equal("pipeline_test")
-  config.cloudflare.name |> should.equal("pipeline-test")
-  config.cloudflare.bindings.kv |> should.equal(["CACHE"])
-  config.cloudflare.bindings.d1
+  config.worker_name |> should.equal("pipeline-test")
+  config.compatibility_date |> should.equal("2025-01-01")
+  config.bindings.kv |> should.equal(["CACHE"])
+  config.bindings.d1
   |> list.length
   |> should.equal(1)
-  case config.cloudflare.bindings.d1 {
+  case config.bindings.d1 {
     [d1] -> {
       d1.binding |> should.equal("DB")
       d1.database_name |> should.equal(Some("pipeline-db"))
@@ -300,29 +295,29 @@ pub fn full_pipeline_test() {
 
   let entrypoint =
     "import * as handler from \"./"
-    <> config.package_name
+    <> "pipeline_test"
     <> ".mjs\";\n"
     <> "export default { fetch: handler.fetch, queue: handler.queue };\n"
   let assert Ok(_) =
     simplifile.write(to: dir <> "/index.js", contents: entrypoint)
 
-  let wrangler =
+  let wrangler_out =
     "name = \""
-    <> config.cloudflare.name
+    <> config.worker_name
     <> "\"\n"
     <> "main = \"./build/dist/bundle.js\"\n"
     <> "compatibility_date = \""
-    <> config.cloudflare.compatibility_date
+    <> config.compatibility_date
     <> "\"\n"
   let assert Ok(_) =
-    simplifile.write(to: dir <> "/wrangler.toml", contents: wrangler)
+    simplifile.write(to: dir <> "/wrangler_out.toml", contents: wrangler_out)
 
   let assert Ok(entrypoint_content) = simplifile.read(dir <> "/index.js")
   entrypoint_content
   |> string.contains("import * as handler from \"./pipeline_test.mjs\"")
   |> should.be_true
 
-  let assert Ok(wrangler_content) = simplifile.read(dir <> "/wrangler.toml")
+  let assert Ok(wrangler_content) = simplifile.read(dir <> "/wrangler_out.toml")
   wrangler_content
   |> string.contains("name = \"pipeline-test\"")
   |> should.be_true

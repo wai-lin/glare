@@ -11,26 +11,23 @@ pub fn main() {
 }
 
 pub fn parse_minimal_config_test() {
-  let toml =
-    "name = \"my_app\"\n" <> "\n" <> "[cloudflare]\n" <> "name = \"my-app\"\n"
-  let result = toml_utils.parse_config(toml)
+  let toml = "name = \"my-app\"\n"
+  let result = toml_utils.parse_wrangler(toml)
   case result {
     Ok(config) -> {
-      config.package_name
-      |> should.equal("my_app")
-      config.cloudflare.name
+      config.worker_name
       |> should.equal("my-app")
-      config.cloudflare.compatibility_date
+      config.compatibility_date
       |> should.equal("")
-      config.cloudflare.bindings.kv
+      config.bindings.kv
       |> should.equal([])
-      config.cloudflare.bindings.d1
+      config.bindings.d1
       |> should.equal([])
-      config.cloudflare.bindings.r2
+      config.bindings.r2
       |> should.equal([])
-      config.cloudflare.durable_objects.classes
+      config.durable_objects.classes
       |> should.equal([])
-      config.cloudflare.vars
+      config.vars
       |> should.equal(dict.new())
     }
     Error(_) -> should.fail()
@@ -38,15 +35,10 @@ pub fn parse_minimal_config_test() {
 }
 
 pub fn parse_config_with_compatibility_date_test() {
-  let toml =
-    "name = \"my_app\"\n"
-    <> "\n"
-    <> "[cloudflare]\n"
-    <> "name = \"my-app\"\n"
-    <> "compatibility_date = \"2025-01-01\"\n"
-  case toml_utils.parse_config(toml) {
+  let toml = "name = \"my-app\"\n" <> "compatibility_date = \"2025-01-01\"\n"
+  case toml_utils.parse_wrangler(toml) {
     Ok(config) ->
-      config.cloudflare.compatibility_date
+      config.compatibility_date
       |> should.equal("2025-01-01")
     Error(_) -> should.fail()
   }
@@ -54,16 +46,16 @@ pub fn parse_config_with_compatibility_date_test() {
 
 pub fn parse_config_with_kv_bindings_test() {
   let toml =
-    "name = \"my_app\"\n"
+    "name = \"my-app\"\n"
     <> "\n"
-    <> "[cloudflare]\n"
-    <> "name = \"my-app\"\n"
+    <> "[[kv_namespaces]]\n"
+    <> "binding = \"CACHE\"\n"
     <> "\n"
-    <> "[cloudflare.bindings]\n"
-    <> "kv = [\"CACHE\", \"SESSIONS\"]\n"
-  case toml_utils.parse_config(toml) {
+    <> "[[kv_namespaces]]\n"
+    <> "binding = \"SESSIONS\"\n"
+  case toml_utils.parse_wrangler(toml) {
     Ok(config) ->
-      config.cloudflare.bindings.kv
+      config.bindings.kv
       |> should.equal(["CACHE", "SESSIONS"])
     Error(_) -> should.fail()
   }
@@ -71,19 +63,16 @@ pub fn parse_config_with_kv_bindings_test() {
 
 pub fn parse_config_with_d1_bindings_test() {
   let toml =
-    "name = \"my_app\"\n"
+    "name = \"my-app\"\n"
     <> "\n"
-    <> "[cloudflare]\n"
-    <> "name = \"my-app\"\n"
-    <> "\n"
-    <> "[cloudflare.bindings]\n"
-    <> "d1 = [\"DB\"]\n"
-  case toml_utils.parse_config(toml) {
+    <> "[[d1_databases]]\n"
+    <> "binding = \"DB\"\n"
+  case toml_utils.parse_wrangler(toml) {
     Ok(config) -> {
-      config.cloudflare.bindings.d1
+      config.bindings.d1
       |> list.length
       |> should.equal(1)
-      case config.cloudflare.bindings.d1 {
+      case config.bindings.d1 {
         [d1] -> {
           d1.binding |> should.equal("DB")
           d1.database_name |> should.equal(None)
@@ -97,24 +86,21 @@ pub fn parse_config_with_d1_bindings_test() {
   }
 }
 
-pub fn parse_config_with_d1_table_bindings_test() {
+pub fn parse_config_with_d1_full_bindings_test() {
   let toml =
-    "name = \"my_app\"\n"
+    "name = \"my-app\"\n"
     <> "\n"
-    <> "[cloudflare]\n"
-    <> "name = \"my-app\"\n"
-    <> "\n"
-    <> "[[cloudflare.d1]]\n"
+    <> "[[d1_databases]]\n"
     <> "binding = \"DB\"\n"
     <> "database_name = \"my-db\"\n"
     <> "database_id = \"abc-123\"\n"
     <> "migrations_dir = \"./db/migrations\"\n"
-  case toml_utils.parse_config(toml) {
+  case toml_utils.parse_wrangler(toml) {
     Ok(config) -> {
-      config.cloudflare.bindings.d1
+      config.bindings.d1
       |> list.length
       |> should.equal(1)
-      case config.cloudflare.bindings.d1 {
+      case config.bindings.d1 {
         [d1] -> {
           d1.binding |> should.equal("DB")
           d1.database_name |> should.equal(Some("my-db"))
@@ -130,21 +116,18 @@ pub fn parse_config_with_d1_table_bindings_test() {
 
 pub fn parse_config_with_multiple_d1_bindings_test() {
   let toml =
-    "name = \"my_app\"\n"
+    "name = \"my-app\"\n"
     <> "\n"
-    <> "[cloudflare]\n"
-    <> "name = \"my-app\"\n"
-    <> "\n"
-    <> "[[cloudflare.d1]]\n"
+    <> "[[d1_databases]]\n"
     <> "binding = \"DB\"\n"
     <> "database_name = \"my-db\"\n"
     <> "\n"
-    <> "[[cloudflare.d1]]\n"
+    <> "[[d1_databases]]\n"
     <> "binding = \"DB_REPLICA\"\n"
     <> "database_id = \"xyz-789\"\n"
-  case toml_utils.parse_config(toml) {
+  case toml_utils.parse_wrangler(toml) {
     Ok(config) -> {
-      config.cloudflare.bindings.d1
+      config.bindings.d1
       |> list.length
       |> should.equal(2)
     }
@@ -154,16 +137,16 @@ pub fn parse_config_with_multiple_d1_bindings_test() {
 
 pub fn parse_config_with_r2_bindings_test() {
   let toml =
-    "name = \"my_app\"\n"
+    "name = \"my-app\"\n"
     <> "\n"
-    <> "[cloudflare]\n"
-    <> "name = \"my-app\"\n"
+    <> "[[r2_buckets]]\n"
+    <> "binding = \"ASSETS\"\n"
     <> "\n"
-    <> "[cloudflare.bindings]\n"
-    <> "r2 = [\"ASSETS\", \"BACKUPS\"]\n"
-  case toml_utils.parse_config(toml) {
+    <> "[[r2_buckets]]\n"
+    <> "binding = \"BACKUPS\"\n"
+  case toml_utils.parse_wrangler(toml) {
     Ok(config) ->
-      config.cloudflare.bindings.r2
+      config.bindings.r2
       |> should.equal(["ASSETS", "BACKUPS"])
     Error(_) -> should.fail()
   }
@@ -171,19 +154,20 @@ pub fn parse_config_with_r2_bindings_test() {
 
 pub fn parse_config_with_queue_bindings_test() {
   let toml =
-    "name = \"my_app\"\n"
+    "name = \"my-app\"\n"
     <> "\n"
-    <> "[cloudflare]\n"
-    <> "name = \"my-app\"\n"
+    <> "[queues]\n"
     <> "\n"
-    <> "[cloudflare.bindings]\n"
-    <> "queues_producers = [\"EVENTS\"]\n"
-    <> "queues_consumers = [\"events\"]\n"
-  case toml_utils.parse_config(toml) {
+    <> "[[queues.producers]]\n"
+    <> "binding = \"EVENTS\"\n"
+    <> "\n"
+    <> "[[queues.consumers]]\n"
+    <> "queue = \"events\"\n"
+  case toml_utils.parse_wrangler(toml) {
     Ok(config) -> {
-      config.cloudflare.bindings.queues_producers
+      config.bindings.queues_producers
       |> should.equal(["EVENTS"])
-      config.cloudflare.bindings.queues_consumers
+      config.bindings.queues_consumers
       |> should.equal(["events"])
     }
     Error(_) -> should.fail()
@@ -192,20 +176,17 @@ pub fn parse_config_with_queue_bindings_test() {
 
 pub fn parse_config_with_vars_test() {
   let toml =
-    "name = \"my_app\"\n"
+    "name = \"my-app\"\n"
     <> "\n"
-    <> "[cloudflare]\n"
-    <> "name = \"my-app\"\n"
-    <> "\n"
-    <> "[cloudflare.vars]\n"
+    <> "[vars]\n"
     <> "ENVIRONMENT = \"production\"\n"
     <> "DEBUG = \"false\"\n"
-  case toml_utils.parse_config(toml) {
+  case toml_utils.parse_wrangler(toml) {
     Ok(config) -> {
-      config.cloudflare.vars
+      config.vars
       |> dict.get("ENVIRONMENT")
       |> should.equal(Ok("production"))
-      config.cloudflare.vars
+      config.vars
       |> dict.get("DEBUG")
       |> should.equal(Ok("false"))
     }
@@ -213,36 +194,51 @@ pub fn parse_config_with_vars_test() {
   }
 }
 
-pub fn parse_config_missing_name_test() {
+pub fn parse_config_with_durable_objects_test() {
   let toml =
-    "version = \"1.0.0\"\n" <> "\n" <> "[cloudflare]\n" <> "name = \"my-app\"\n"
-  toml_utils.parse_config(toml)
-  |> should.be_error
-}
-
-pub fn parse_config_missing_cloudflare_section_test() {
-  let toml = "name = \"my_app\"\n" <> "version = \"1.0.0\"\n"
-  toml_utils.parse_config(toml)
-  |> should.be_error
-}
-
-pub fn parse_config_missing_cloudflare_name_test() {
-  let toml =
-    "name = \"my_app\"\n"
+    "name = \"my-app\"\n"
     <> "\n"
-    <> "[cloudflare]\n"
-    <> "compatibility_date = \"2025-01-01\"\n"
-  toml_utils.parse_config(toml)
+    <> "[durable_objects]\n"
+    <> "\n"
+    <> "[[durable_objects.bindings]]\n"
+    <> "name = \"Counter\"\n"
+    <> "class_name = \"CounterDO\"\n"
+    <> "\n"
+    <> "[[durable_objects.bindings]]\n"
+    <> "name = \"ChatRoom\"\n"
+    <> "class_name = \"ChatRoomDO\"\n"
+  case toml_utils.parse_wrangler(toml) {
+    Ok(config) -> {
+      config.durable_objects.classes
+      |> list.length
+      |> should.equal(2)
+      case config.durable_objects.classes {
+        [first, second, ..] -> {
+          first.name |> should.equal("Counter")
+          first.class_name |> should.equal("CounterDO")
+          second.name |> should.equal("ChatRoom")
+          second.class_name |> should.equal("ChatRoomDO")
+        }
+        _ -> should.fail()
+      }
+    }
+    Error(_) -> should.fail()
+  }
+}
+
+pub fn parse_config_missing_name_test() {
+  let toml = "compatibility_date = \"2025-01-01\"\n"
+  toml_utils.parse_wrangler(toml)
   |> should.be_error
 }
 
 pub fn parse_config_invalid_toml_test() {
   let toml = "this is not valid toml {{{"
-  toml_utils.parse_config(toml)
+  toml_utils.parse_wrangler(toml)
   |> should.be_error
 }
 
 pub fn parse_empty_config_test() {
-  toml_utils.parse_config("")
+  toml_utils.parse_wrangler("")
   |> should.be_error
 }

@@ -25,11 +25,11 @@ gleam add gflare
 gleam run -m gflare -- init
 ```
 
-This adds a `[cloudflare]` section to your `gleam.toml`:
+This creates a `wrangler.toml` with the required fields:
 
 ```toml
-[cloudflare]
 name = "my-worker"
+main = "./build/dist/bundle.js"
 compatibility_date = "2025-01-15"
 ```
 
@@ -75,8 +75,8 @@ Follow the prompts to authenticate with Cloudflare. Your worker will be deployed
 
 1. `gleam build` compiled your Gleam to JavaScript (.mjs files)
 2. gflare detected your `fetch` handler function
-3. It generated `index.js` (Cloudflare Worker entrypoint) and `wrangler.toml`
-4. esbuild bundled everything into a single file
+3. It generated `index.js` (Cloudflare Worker entrypoint) from your `wrangler.toml` bindings
+4. esbuild bundled everything into `build/dist/bundle.js`
 5. wrangler deployed to Cloudflare
 
 ## Next steps

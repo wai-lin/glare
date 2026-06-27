@@ -1,7 +1,5 @@
-import gflare/cli/toml_utils.{type Config, type DoClass}
-import gleam/dict
+import gflare/cli/toml_utils.{type DoClass}
 import gleam/list
-import gleam/option.{None, Some}
 import gleam/result
 import gleam/string
 import simplifile
@@ -36,7 +34,7 @@ fn build_entrypoint_js(
       <> " } from \"../dev/javascript/"
       <> package_name
       <> "/"
-      <> cls.module
+      <> cls.class_name
       <> "_wrapped.mjs\";"
     })
   ]
@@ -91,156 +89,12 @@ fn build_entrypoint_js(
   <> "\n"
 }
 
-pub fn wrangler_config(
-  output_path: String,
-  worker_name: String,
-  compat_date: String,
-  config: Config,
-) -> Result(Nil, String) {
-  let content = build_wrangler_toml(worker_name, compat_date, config)
-  simplifile.write(to: output_path, contents: content)
-  |> result.map_error(fn(e) {
-    "Failed to write wrangler.toml: " <> string.inspect(e)
-  })
-}
-
-fn build_wrangler_toml(
-  worker_name: String,
-  compat_date: String,
-  config: Config,
-) -> String {
-  let cf = config.cloudflare
-
-  let header = [
-    "name = \"" <> worker_name <> "\"",
-    "main = \"./build/dist/index.js\"",
-    "compatibility_date = \"" <> compat_date <> "\"",
-    "",
-  ]
-
-  let kv_lines =
-    list.flat_map(cf.bindings.kv, fn(name) {
-      [
-        "[[kv_namespaces]]",
-        "binding = \"" <> name <> "\"",
-        "id = \"YOUR_KV_NAMESPACE_ID\"",
-        "",
-      ]
-    })
-
-  let d1_lines =
-    list.flat_map(cf.bindings.d1, fn(d1) {
-      let base = [
-        "[[d1_databases]]",
-        "binding = \"" <> d1.binding <> "\"",
-      ]
-      let with_name = case d1.database_name {
-        Some(name) -> list.append(base, ["database_name = \"" <> name <> "\""])
-        None ->
-          list.append(base, [
-            "database_name = \""
-            <> worker_name
-            <> "-"
-            <> string.lowercase(d1.binding)
-            <> "\"",
-          ])
-      }
-      let with_id = case d1.database_id {
-        Some(id) -> list.append(with_name, ["database_id = \"" <> id <> "\""])
-        None ->
-          list.append(with_name, ["database_id = \"YOUR_D1_DATABASE_ID\""])
-      }
-      case d1.migrations_dir {
-        Some(dir) ->
-          list.append(with_id, ["migrations_dir = \"" <> dir <> "\"", ""])
-        None -> list.append(with_id, [""])
-      }
-    })
-
-  let r2_lines =
-    list.flat_map(cf.bindings.r2, fn(name) {
-      [
-        "[[r2_buckets]]",
-        "binding = \"" <> name <> "\"",
-        "bucket_name = \""
-          <> worker_name
-          <> "-"
-          <> string.lowercase(name)
-          <> "\"",
-        "",
-      ]
-    })
-
-  let queue_producer_lines =
-    list.flat_map(cf.bindings.queues_producers, fn(name) {
-      [
-        "[[queues.producers]]",
-        "binding = \"" <> name <> "\"",
-        "queue_name = \"" <> string.lowercase(name) <> "\"",
-        "",
-      ]
-    })
-
-  let queue_consumer_lines =
-    list.flat_map(cf.bindings.queues_consumers, fn(queue_name) {
-      [
-        "[[queues.consumers]]",
-        "queue = \"" <> queue_name <> "\"",
-        "",
-      ]
-    })
-
-  let do_lines = case cf.durable_objects.classes {
-    [] -> []
-    classes -> {
-      let bindings =
-        list.map(classes, fn(cls) {
-          "{ name = \""
-          <> cls.name
-          <> "\", class_name = \""
-          <> cls.name
-          <> "\" }"
-        })
-      [
-        "[durable_objects]",
-        "bindings = [" <> string.join(bindings, ", ") <> "]",
-        "",
-      ]
-    }
-  }
-
-  let var_lines = case dict.is_empty(cf.vars) {
-    True -> []
-    False -> {
-      let lines =
-        dict.fold(cf.vars, [], fn(acc, key, value) {
-          list.append(acc, [key <> " = \"" <> value <> "\""])
-        })
-      list.append(["[vars]"], lines)
-    }
-  }
-
-  string.join(
-    list.flatten([
-      header,
-      kv_lines,
-      d1_lines,
-      r2_lines,
-      queue_producer_lines,
-      queue_consumer_lines,
-      do_lines,
-      var_lines,
-    ]),
-    "\n",
-  )
-}
-
 pub fn do_class(
   root_dir: String,
   package_name: String,
   class_config: DoClass,
 ) -> Result(Nil, String) {
-  let module_path = class_config.module
+  let module_path = class_config.class_name
   let gleam_mjs_path =
     root_dir
     <> "/build/dev/javascript/"

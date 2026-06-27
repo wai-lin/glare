@@ -12,16 +12,12 @@ pub fn run() -> Nil {
     |> result.map_error(fn(_) {
       "Could not read gleam.toml. Are you in a Gleam project?"
     })
-    |> result.try(fn(content) {
-      extract_package_name(content)
-      |> result.map(fn(name) { #(content, name) })
+    |> result.try(fn(content) { extract_package_name(content) })
+    |> result.try(fn(package_name) {
+      setup_wrangler_toml(package_name)
+      |> result.map(fn(_) { package_name })
     })
-    |> result.try(fn(pair) {
-      let #(content, name) = pair
-      add_cloudflare_section(content, name)
-      |> result.map(fn(_) { name })
-    })
-    |> result.try(fn(name) { write_handler(name) })
+    |> result.try(fn(package_name) { write_handler(package_name) })
 
   case outcome {
     Ok(_) -> {
@@ -56,35 +52,77 @@ fn extract_package_name(content: String) -> Result(String, String) {
   }
 }
 
-fn add_cloudflare_section(
-  content: String,
-  package_name: String,
+fn setup_wrangler_toml(package_name: String) -> Result(Nil, String) {
+  let worker_name =
+    package_name |> string.replace("_", with: "-") |> string.lowercase
+  let today = do_get_iso_date()
+
+  case simplifile.is_file("wrangler.toml") {
+    Ok(True) -> {
+      io.println("  wrangler.toml already exists")
+      use content <- result.try(
+        simplifile.read("wrangler.toml")
+        |> result.map_error(fn(_) { "Failed to read wrangler.toml" }),
+      )
+      update_wrangler_toml(content, worker_name, today)
+    }
+    _ -> create_wrangler_toml(worker_name, today)
+  }
+}
+
+fn create_wrangler_toml(
+  worker_name: String,
+  today: String,
 ) -> Result(Nil, String) {
-  case string.contains(content, "[cloudflare]") {
+  let content =
+    "name = \""
+    <> worker_name
+    <> "\"\n"
+    <> "main = \"./build/dist/bundle.js\"\n"
+    <> "compatibility_date = \""
+    <> today
+    <> "\"\n"
+  simplifile.write(to: "wrangler.toml", contents: content)
+  |> result.map_error(fn(_) { "Failed to create wrangler.toml" })
+}
+
+fn update_wrangler_toml(
+  content: String,
+  worker_name: String,
+  today: String,
+) -> Result(Nil, String) {
+  let lines = string.split(content, "\n")
+  let has_name =
+    list.any(lines, fn(line) { string.starts_with(line, "name = ") })
+  let has_main =
+    list.any(lines, fn(line) { string.starts_with(line, "main = ") })
+  let has_compat =
+    list.any(lines, fn(line) {
+      string.starts_with(line, "compatibility_date = ")
+    })
+
+  case has_name && has_main && has_compat {
     True -> {
-      io.println("  [cloudflare] section already exists in gleam.toml")
+      io.println("  wrangler.toml already configured")
       Ok(Nil)
     }
     False -> {
-      let cf_name =
-        package_name |> string.replace("_", with: "-") |> string.lowercase
-      let today = do_get_iso_date()
-      let section =
-        "\n[cloudflare]\n"
-        <> "name = \""
-        <> cf_name
-        <> "\"\n"
-        <> "compatibility_date = \""
-        <> today
-        <> "\"\n"
-        <> "\n"
-        <> "[cloudflare.bindings]\n"
-      use _ <- result.try(
-        simplifile.append(to: "gleam.toml", contents: section)
-        |> result.map_error(fn(_) { "Failed to update gleam.toml" }),
-      )
-      io.println("  Added [cloudflare] section to gleam.toml")
-      Ok(Nil)
+      io.println("  Updating wrangler.toml with missing fields...")
+      let updated = content
+      let updated = case has_name {
+        True -> updated
+        False -> updated <> "\nname = \"" <> worker_name <> "\"\n"
+      }
+      let updated = case has_main {
+        True -> updated
+        False -> updated <> "main = \"./build/dist/bundle.js\"\n"
+      }
+      let updated = case has_compat {
+        True -> updated
+        False -> updated <> "compatibility_date = \"" <> today <> "\"\n"
+      }
+      simplifile.write(to: "wrangler.toml", contents: updated)
+      |> result.map_error(fn(_) { "Failed to update wrangler.toml" })
     }
   }
 }

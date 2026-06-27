@@ -26,9 +26,8 @@ fn do_build(deploy: Bool, dev: Bool) -> Result(Nil, String) {
   )
 
   let package_name = config.package_name
-  let cf_config = config.cloudflare
-  let cf_name = cf_config.name
-  let compat_date = case cf_config.compatibility_date {
+  let worker_name = config.worker_name
+  let compat_date = case config.compatibility_date {
     "" -> do_get_iso_date()
     d -> d
   }
@@ -53,7 +52,7 @@ fn do_build(deploy: Bool, dev: Bool) -> Result(Nil, String) {
     },
   )
 
-  let do_classes = cf_config.durable_objects.classes
+  let do_classes = config.durable_objects.classes
   list.each(do_classes, fn(cls) {
     case generate.do_class(".", package_name, cls) {
       Ok(_) -> io.println("Generated DO wrapper: " <> cls.name)
@@ -75,19 +74,9 @@ fn do_build(deploy: Bool, dev: Bool) -> Result(Nil, String) {
     do_classes,
   ))
 
-  let wrangler_path = "wrangler.toml"
-  use _ <- result.try(generate.wrangler_config(
-    wrangler_path,
-    cf_name,
-    compat_date,
-    config,
-  ))
-
   io.println("Bundling with esbuild...")
   let output_path = dist_dir <> "/bundle.js"
   use _ <- result.try(run_esbuild(entrypoint_path, output_path))
-
-  use _ <- result.try(update_wrangler_main(wrangler_path, output_path))
 
   io.println("\nBuild complete!\n")
 
@@ -167,22 +156,6 @@ fn run_wrangler_deploy() -> Result(Nil, String) {
         "wrangler deploy failed (exit " <> string.inspect(code) <> "): " <> msg,
       )
   }
-}
-
-fn update_wrangler_main(
-  wrangler_path: String,
-  output_path: String,
-) -> Result(Nil, String) {
-  use content <- result.try(
-    simplifile.read(wrangler_path)
-    |> result.map_error(fn(_) { "Failed to read wrangler.toml" }),
-  )
-  let relative_path = output_path
-  let updated =
-    content
-    |> string.replace("./build/dist/index.js", with: "./" <> relative_path)
-  simplifile.write(to: wrangler_path, contents: updated)
-  |> result.map_error(fn(_) { "Failed to update wrangler.toml" })
 }
 
 @external(javascript, "../ffi.mjs", "get_iso_date")
